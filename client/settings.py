@@ -1,0 +1,3 @@
+PORT = 21
+DATA_PORT = 20
+SIZE = 1024
