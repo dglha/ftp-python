@@ -52,7 +52,10 @@ class FtpClientHandler(Thread):
             except Exception as e:
                 # print(e)
                 print("Command not found. Please type h or HELP for help!")
-                self.command_socket.send("HELP".encode('utf-8'))
+                cmd = command + " " + args if args else ""
+                if not cmd:
+                    print("NULL")
+                self.command_socket.send(cmd.encode('utf-8'))
 
     """
         DATA FUNCS
@@ -116,3 +119,24 @@ class FtpClientHandler(Thread):
                 break
             print(msg)
         self.stop_data_socket()
+
+    def CWD(self, dir_path):
+        command = "CWD " + str(dir_path)
+        if not self.is_authorized:
+            return
+        self.command_socket.send(command.encode('utf-8'))
+
+    def CDUP(self, *args):
+        command = "CDUP"
+        if not self.is_authorized:
+            return
+        self.command_socket.send(command.encode('utf-8'))
+
+    def PWD(self, *args):
+        command = "PWD"
+        if not self.is_authorized:
+            return
+        self.send_message(command)
+
+        
+

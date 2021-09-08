@@ -130,6 +130,29 @@ class FtpServerHandler(Thread):
         self.stop_data_socket()
         self.send_message("226 Closing data connection.")
 
+    def PWD(self, command):
+        self.send_message(f"{self.cwd}. \r\n")
+
+    def CWD(self, dir_path):
+        dir_path = os.path.join(self.cwd, dir_path)
+        if not os.path.exists(dir_path) and not os.path.isdir(dir_path):
+            self.send_message("CWD false, directory not exists. \r\n")
+            return
+        self.cwd = dir_path
+        self.send_message("500 CWD Successfully!")
+
+    def NLIST(self):
+        pass
+
+    def CDUP(self, command):
+        path = os.path.join(self.cwd, '..')
+        print(path)
+        self.cwd = os.path.abspath(path)
+        self.send_message("500 CDUP Successfully!")
+
+        
+
+
     """
         AUTH FUNCS
     """
@@ -154,3 +177,5 @@ class FtpServerHandler(Thread):
 
     def HELP(self, *args):
         self.send_message('Ngu')
+
+    
