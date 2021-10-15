@@ -3,7 +3,12 @@ import os
 import socket
 from threading import Thread
 import threading
+from utils import get_file_properties
 from settings import *
+import re
+import shutil
+
+ALLOW_DELETE = False
 
 
 class FtpServerHandler(Thread):
@@ -77,7 +82,10 @@ class FtpServerHandler(Thread):
             )
 
     def send_data(self, data):
-        self.client_data_socket.send(data.encode("utf-8"))
+        self.client_data_socket.send(data)
+
+    def recv_data(self):
+        return self.client_data_socket.recv(SIZE)
 
     """
         FUNCS
@@ -98,7 +106,6 @@ class FtpServerHandler(Thread):
             # print(path_name)
         else:
             path_name = os.path.abspath(os.path.join(self.cwd, dir_path))
-            # print(path_name)
 
         if not self.is_authorization:
             self.send_message("530 User not logged in!")
@@ -109,18 +116,26 @@ class FtpServerHandler(Thread):
                 "550 Requested action not taken. File unavailable (e.g., file not found, no access)."
             )
             return
-        
+
         self.create_data_socket()
-        
+
         if os.path.isdir(path_name):
             # If path_name is dir
             print("LIST dir")
             self.send_message("150 dir info\n")
             for file in os.listdir(path_name):
-                file_info = os.path.basename(file)
-                self.send_data(file_info + "\n")
+                print(file)
+                # file_info = os.path.basename(file)
+                # msg = file_info + "\n"
+                file_info = get_file_properties(os.path.join(path_name, file))
+                print(file_info)
+                # print(type(file_info))
+                # print(file_info)
+                # print(msg)
+                # self.send_data(file_info.encode("utf-8"))
+                self.send_data(file_info.encode())
 
-        else: # path_name is path of file
+        else:  # path_name is path of file
             print("LIST file")
             self.send_message("150 File info\n")
             file_info = os.path.basename(path_name)
@@ -145,13 +160,148 @@ class FtpServerHandler(Thread):
         pass
 
     def CDUP(self, command):
-        path = os.path.join(self.cwd, '..')
-        print(path)
+        path = os.path.join(self.cwd, "..")
         self.cwd = os.path.abspath(path)
         self.send_message("500 CDUP Successfully!")
 
-        
+    def CAT(self, file_path):
+        # ^READ content of one file
+        path = os.path.join(self.cwd, file_path)
 
+        if not os.path.exists(path) and os.path.isfile(path):
+            self.send_message("CAT false, file not exists. \r\n")
+            return
+
+        # * Only accept txt and md file
+        file_ext = re.search(REGEX_FILE_EXTENSION, path).group()
+        if file_ext not in ACCEPT_CAT_FILE_TYPES:
+            self.send_message("CAT false, only support *.txt or *.md file. \r\n")
+            return
+
+        self.send_message("200. Here file contents. \r\n")
+        self.create_data_socket()
+
+        with open(path, "rb") as file:
+            file_contents = (
+                file.read()
+            )  # Read all content of file into a string variable
+        self.send_data(file_contents)
+
+        self.stop_data_socket()
+
+    def MKD(self, dir_name):
+        if not dir_name:
+            self.send_message(f"MKD Failed - No directory name was provided!\r\n")
+        path = os.path.join(self.cwd, dir_name)
+        if not self.is_authorization:
+            self.send_message("530 User not logged in!")
+
+        else:
+            # ^Create new dir with dir_)name provided
+            try:
+                os.mkdir(path)
+                self.send_message(f"257 MKD Directory created - {dir_name}")
+            except OSError:
+                self.send_message(
+                    f"550 MKD failed - Directory {dir_name} already exists.\r\n"
+                )
+
+    def RMD(self, dir_name):
+        if not dir_name:
+            self.send_message(f"MKD Failed - No directory name was provided!\r\n")
+        path = os.path.join(self.cwd, dir_name)
+
+        # ^Check if user is authenticated
+        if not self.is_authorization:
+            self.send_message("530 User not logged in!")
+
+        elif not ALLOW_DELETE:
+            self.send_message(
+                f"450 RMD failed - Detele operation not allow on this server! \r\n"
+            )
+
+        # ^If dir is not exists
+        elif not os.path.exists(path):
+            self.send_message(f"550 RMD failed - Directory {dir_name} not exists!\r\n")
+
+        else:
+            shutil.rmtree(path=path)
+            self.send_message(f"250 RMD Directory deteled!\r\n")
+
+    def DELE(self, file_name):
+        path = os.path.join(self.cwd, file_name)
+
+        # ^Check if user is authenticated
+        if not self.is_authorization:
+            self.send_message("530 User not logged in!")
+
+        # ^If file or dir is not exists
+        elif not os.path.exists(path):
+            self.send_message(f"550 DELE failed File {file_name} not exists.\r\n")
+
+        elif not ALLOW_DELETE:
+            self.send_message(
+                f"450 DELE failed - Detele operation not allow on this server! \r\n"
+            )
+
+        else:
+            # ^Delete file
+            os.remove(path)
+            self.send_message("250 DELE File deleted.\r\n")
+
+    """ Recive file from client """
+
+    def PUT(self, file_name):
+        # ^Check if user is authenticated
+        if not self.is_authorization:
+            self.send_message("530 User not logged in!")
+            return
+
+        self.send_message("200. Created data connection.\r\n")
+        self.create_data_socket()
+
+        # ^Open in write Binary mode
+        with open(file_name, "wb") as file:
+            data = self.recv_data()
+            while data:
+                file.write(data)
+                data = self.recv_data()
+            self.send_message("200. File recived.\r\n")
+
+        self.stop_data_socket()
+
+    """ Send file to client """
+
+    def GET(self, file_name):
+        # ^Check if user is authenticated
+        if not self.is_authorization:
+            self.send_message("530 User not logged in!")
+            return
+
+        path = os.path.join(self.cwd, file_name)
+        if not file_name:
+            self.send_message(f"GET Failed - No file name was provided!\r\n")
+
+        elif not os.path.exists(path):
+            self.send_message(f"GET Failed - File {file_name} doesn't exist!\r\n")
+
+        elif not os.path.isfile(path):
+            self.send_message(f"GET Failed - {file_name} is not file!\r\n")
+
+        else:
+            self.create_data_socket()
+            try:
+                with open(path, "rb") as file:
+                    data = file.read(SIZE)
+                    while data:
+                        self.send_data(data)
+                        data = file.read(SIZE)
+                    self.send_message("200. File sent.\r\n")
+            except OSError as e:
+                self.send_message(f"GET error - Please try againt - {e}")
+                self.stop_data_socket()
+
+            self.stop_data_socket()
 
     """
         AUTH FUNCS
@@ -175,7 +325,14 @@ class FtpServerHandler(Thread):
         else:
             self.send_message("404 OK - Sytax error")
 
-    def HELP(self, *args):
-        self.send_message('Ngu')
+    def QUIT(self, *args):
+        print("QUIT")
+        self.is_authorization = False
+        self.send_message("221 Goodbye!\r\n")
 
-    
+    """
+        HELP
+    """
+
+    def HELP(self, *args):
+        self.send_message("Ngu")
