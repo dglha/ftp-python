@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 # from Model.User import User
 from Model.User import User
-from utils import get_file_properties
+from utils import get_file_properties, get_sys_info
 from settings import *
 import re
 import shutil
@@ -17,7 +17,7 @@ connection = engine.connect()
 DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
-ALLOW_DELETE = False
+ALLOW_DELETE = True
 
 
 class ServerWorker(Thread):
@@ -43,6 +43,7 @@ class ServerWorker(Thread):
 
     def run(self):
         self.send_message("220 Welcome.\r\n")
+        # self.welcome()
         while True:
             try:
                 data = self.client_socket.recv(SIZE).rstrip()
@@ -124,41 +125,61 @@ class ServerWorker(Thread):
     """
 
     def TYPE(self, type):
+        """
+        Sets the transfer mode (ASCII/Binary)
+        :param type: "I": Binary, "A": ASCII
+        :return: 200 Code
+        """
         self.mode = type
         if self.mode == "I":
             self.send_message("200 binary mode. \r\n")
         elif self.mode == "A":
             self.send_message("200 ASCII mode. \r\n")
 
-    def PASV(self, command):
-        print("PASV: ", command)
+    def PASV(self, *args):
+        """
+        Enter passive mode
+
+        :return: 227 Code (h1,h2,h3,h4,p1,p2): h1-4: IP Address, p1-2: Port number
+                 p1 * 256 + p2
+        """
+        print("PASV")
         self.pasv_mode = True
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Pick free port number -> bind to 0
         self.server_socket.bind((self.HOST, 0))
         self.server_socket.listen(5)
         address, port = self.server_socket.getsockname()
-        print(address, port)
-        text = f"227 Entering Passive Mode ({','.join(address.split('.'))},{port >> 8 & 0xFF},{port & 0xFF}).\r\n"
-        # text = f"227 Entering Passive Mode ({','.join(address.split('.'))},{port}).\r\n"
-
-        print(text)
-        self.send_message(
-            text
-        )
+        p1 = port // 256
+        p2 = port % 256
+        # text = f"227 Entering Passive Mode ({','.join(address.split('.'))},{port >> 8 & 0xFF},{port & 0xFF}).\r\n"
+        text = f"227 Entering Passive Mode ({','.join(address.split('.'))},{p1},{p2}).\r\n"
+        self.send_message(text)
 
     def PORT(self, command):
-        print("[SERVER] PORT" + command)
+        """
+        Specifies an address and port to which the server should connect.
+
+        :param command: h1,h2,h3,h4,h5
+        :return:
+        """
+        # TODO - implement PORT command
+        pass
 
     def LIST(self, dir_path):
+        """
+        Returns information of a file or directory if specified,
+        else information of the current working directory is returned.
+
+        :param dir_path: path of a file or directory
+        :return: 266. Closing data connection. List done
+        """
 
         if not dir_path:
-            print("NONE")
             path_name = os.path.abspath(os.path.join(self.cwd, "."))
-            print("PATH 1 : ", path_name)
         else:
             path_name = os.path.abspath(os.path.join(self.cwd, dir_path))
-            print("PATH 2 : ", path_name)
 
         if not self.is_authorization:
             self.send_message("530 User not logged in!")
@@ -174,57 +195,80 @@ class ServerWorker(Thread):
 
         if os.path.isdir(path_name):
             # If path_name is dir
-            print("LIST dir")
-            # self.send_message("150 dir info.\r\n")
             for file in os.listdir(path_name):
-                print(file)
                 file_info = get_file_properties(os.path.join(path_name, file))
-                self.send_data(file_info.encode())
+                self.send_data((file_info + "\r\n").encode())
 
         else:  # path_name is path of file
-            print("LIST file")
-            self.send_message("150 File info\n")
             file_info = os.path.basename(path_name)
-            self.send_data(file_info + "\n")
-            print("send")
+            self.send_data((file_info + "\r\n").encode())
 
         self.stop_data_socket()
         self.send_message("226 Closing data connection. \r\n")
 
-    def PWD(self, command):
-        self.send_message(f"{self.cwd}. \r\n")
+    def NLST(self, dir_path):
+        """
+        Returns a list of file names in a specified directory.
+
+        :param: dir_path: path to check
+        :return: 266. Closing data connection. NList done
+        """
+        self.LIST(dir_path)
+
+    def PWD(self, *args):
+        """
+        Print working directory.
+
+        :return: 257 Returns the current directory of the host.
+        """
+        # print(self.cwd)
+        self.send_message(f"257 \"{self.cwd}\". \r\n")
 
     def CWD(self, dir_path):
+        """
+        Change working directory.
+
+        :param dir_path: path to go
+        :return: 250 Requested file action okay, completed.
+        """
         dir_path = os.path.join(self.cwd, dir_path)
         if not os.path.exists(dir_path) and not os.path.isdir(dir_path):
             self.send_message("CWD false, directory not exists. \r\n")
             return
         self.cwd = dir_path
-        self.send_message("500 CWD Successfully!\r\n")
+        self.send_message("250 CWD Successfully!\r\n")
 
-    def NLIST(self):
-        pass
+    def CDUP(self, *args):
+        """
+        Change to Parent Directory.
 
-    def CDUP(self, command):
-        path = os.path.join(self.cwd, "../..")
+        :return: 200 The requested action has been successfully completed.
+        """
+        path = os.path.join(self.cwd, "..")
         self.cwd = os.path.abspath(path)
-        self.send_message("500 CDUP Successfully!\r\n")
+        self.send_message("200 CDUP Successfully!\r\n")
 
     def CAT(self, file_path):
+        """
+        Display content of file (md, txt only)
+
+        :param file_path: path of file (name)
+        :return: 266. Closing data connection. Cat done
+        """
         # ^READ content of one file
         path = os.path.join(self.cwd, file_path)
 
         if not os.path.exists(path) and os.path.isfile(path):
-            self.send_message("CAT false, file not exists. \r\n")
+            self.send_message("CAT false, file not exists.\r\n")
             return
 
         # * Only accept txt and md file
         file_ext = re.search(REGEX_FILE_EXTENSION, path).group()
         if file_ext not in ACCEPT_CAT_FILE_TYPES:
-            self.send_message("CAT false, only support *.txt or *.md file. \r\n")
+            self.send_message("CAT false, only support *.txt or *.md file.\r\n")
             return
 
-        self.send_message("200. Here file contents. \r\n")
+        # self.send_message("200. Here file contents. \r\n")
         self.create_data_socket()
 
         with open(path, "rb") as file:
@@ -234,8 +278,15 @@ class ServerWorker(Thread):
         self.send_data(file_contents)
 
         self.stop_data_socket()
+        self.send_message("226 Closing data connection. \r\n")
 
     def MKD(self, dir_name):
+        """
+        Make directory.
+
+        :param dir_name: Directory name
+        :return: 257 Directory created.
+        """
         if not dir_name:
             self.send_message(f"MKD Failed - No directory name was provided!\r\n")
         path = os.path.join(self.cwd, dir_name)
@@ -247,12 +298,19 @@ class ServerWorker(Thread):
             try:
                 os.mkdir(path)
                 self.send_message(f"257 MKD Directory created - {dir_name}.\r\n")
-            except OSError:
+            except OSError as e:
+                print(e)
                 self.send_message(
                     f"550 MKD failed - Directory {dir_name} already exists.\r\n"
                 )
 
     def RMD(self, dir_name):
+        """
+        Remove a directory.
+
+        :param dir_name: Directory name
+        :return: 250 Directory deleted
+        """
         if not dir_name:
             self.send_message(f"MKD Failed - No directory name was provided!\r\n")
         path = os.path.join(self.cwd, dir_name)
@@ -275,6 +333,12 @@ class ServerWorker(Thread):
             self.send_message(f"250 RMD Directory deteled!\r\n")
 
     def DELE(self, file_name):
+        """
+        Delete file.
+
+        :param file_name: File to delete
+        :return: 250 File deleted
+        """
         path = os.path.join(self.cwd, file_name)
 
         # ^Check if user is authenticated
@@ -295,9 +359,12 @@ class ServerWorker(Thread):
             os.remove(path)
             self.send_message("250 DELE File deleted.\r\n")
 
-    """ Recive file from client """
+    """
+        SOCKET RECEIVE - SEND FUNC
+    """
 
     def PUT(self, file_name):
+        """"""
         # ^Check if user is authenticated
         if not self.is_authorization:
             self.send_message("530 User not logged in!\r\n")
@@ -317,6 +384,12 @@ class ServerWorker(Thread):
         self.stop_data_socket()
 
     def STOR(self, file_name):
+        """
+        Accept the data and to store the data as a file at the server site
+
+        :param file_name: File to send
+        :return: 226 Transfer completed
+        """
         if not self.is_authorization:
             self.send_message("530 User not logged in!\r\n")
             return
@@ -373,12 +446,18 @@ class ServerWorker(Thread):
 
             self.stop_data_socket()
 
-    def REST(self, position):
-        self.pos = position
-        self.rest = True
-        self.send_message("250 File position reseted.\r\n")
+    # def REST(self, position):
+    #     self.pos = position
+    #     self.rest = True
+    #     self.send_message("250 File position reseted.\r\n")
 
     def RETR(self, file_name):
+        """
+        Retrieve a copy of the file
+
+        :param file_name: Name of file
+        :return: 226 Transfer completed
+        """
         path = os.path.join(self.cwd, file_name)
         print(path)
 
@@ -411,7 +490,7 @@ class ServerWorker(Thread):
             self.stop_data_socket()
 
     """
-        AUTH FUNCS
+        AUTHENTICATION FUNCS
     """
 
     def USER(self, user):
@@ -450,3 +529,27 @@ class ServerWorker(Thread):
 
     def HELP(self, *args):
         self.send_message("Ngu.\r\n")
+
+    """
+        UTILS FUNC
+    """
+    def SYS(self, *args):
+        """
+        Get system info
+
+        :return: 215 Get system type
+        """
+        info = get_sys_info()
+        text = ""
+        for key in info.keys():
+            text += f"{key}: {info[key]}\r\n"
+
+        self.send_message("215 System information:\r\n" + text)
+
+    def welcome(self):
+        info = get_sys_info()
+        text = ""
+        for key in info.keys():
+            text += f"{key}: {info[key]}, "
+
+        self.send_message("215 Welcome." + text)
