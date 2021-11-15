@@ -117,7 +117,7 @@ class ServerWorker(Thread):
     def send_data(self, data):
         self.client_data_socket.send(data)
 
-    def recv_data(self):
+    def receive_data(self):
         return self.client_data_socket.recv(SIZE)
 
     """
@@ -375,11 +375,11 @@ class ServerWorker(Thread):
 
         # ^Open in write Binary mode
         with open(file_name, "wb") as file:
-            data = self.recv_data()
+            data = self.receive_data()
             while data:
                 file.write(data)
-                data = self.recv_data()
-            self.send_message("200. File recived.\r\n")
+                data = self.receive_data()
+            self.send_message("200. File received.\r\n")
 
         self.stop_data_socket()
 
