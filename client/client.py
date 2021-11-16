@@ -1,19 +1,16 @@
-import os 
-import logging
 import socket
-import threading
-import sys
-from ftp_client_handler import FtpClientHandler
+from Worker.CommandLineWorker import CommandLineWorker
 
-def main():
+
+def command_line():
     server_ip = input("Server ip: ")
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # f = FTP('192.168.1.132', 21)
     client.connect((server_ip, 21))
     print("Connect successfully!")
 
-    handler = FtpClientHandler(client)
+    handler = CommandLineWorker(client)
     handler.start()
 
+
 if __name__ == "__main__":
-    main()
+    command_line()
