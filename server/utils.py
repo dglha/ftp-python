@@ -30,13 +30,22 @@ def get_file_properties(file_path):
             stat.S_IXOTH,  # ~ Others have execute permission.
         ]
 
+        mode = _stat.st_mode
+        full_mode = ""
+        full_mode += "d" if os.path.isdir(file_path) else "-"
+
+        for i in range(9):
+            full_mode += bool(mode & modes[i]) and 'rwxrwxrwx'[i] or '-'
+        return full_mode
+
+
     def _get_size():
         return str(_stat.st_size)
 
     def _get_last_time():
         return time.strftime("%b %d %H:%M", time.gmtime(_stat.st_mtime))
 
-    for function in ("_get_size()", "_get_last_time()"):
+    for function in ("_get_file_mode()", "_get_size()", "_get_last_time()"):
         print(eval(function))
         message.append(eval(function))
 
