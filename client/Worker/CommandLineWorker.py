@@ -10,14 +10,13 @@ class MessageHandler(Thread):
         self.socket = socket
 
     def run(self):
-        print("syaty")
         while True:
             msg = self.socket.recv(SIZE).strip()
             print(msg.decode("utf-8"))
             print(">>> ", end="")
 
 
-class FtpClientHandler(Thread):
+class CommandLineWorker(Thread):
     def __init__(self, socket: socket.socket) -> None:
         Thread.__init__(self)
         self.command_socket = socket
@@ -51,10 +50,9 @@ class FtpClientHandler(Thread):
             except Exception as e:
                 # print(e)
                 print("Command not found. Please type h or HELP for help!")
-                cmd = command + " " + args if args else ""
-                if not cmd:
-                    print("NULL")
-                self.command_socket.send(cmd.encode("utf-8"))
+                # cmd = command + " " + args if args else ""
+                # if not cmd:
+                self.command_socket.send("help".encode("utf-8"))
 
     """
         DATA FUNCS
@@ -173,4 +171,5 @@ class FtpClientHandler(Thread):
                 file.write(data) 
         self.stop_data_socket()
 
-        
+    def QUIT(self, *args):
+        self.send_message("quit")
