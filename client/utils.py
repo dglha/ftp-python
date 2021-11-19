@@ -1,4 +1,8 @@
 from typing import List, Union
+import os
+import stat
+import time
+
 
 class HumanSize:
     METRIC_LABELS: List[str] = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
@@ -48,9 +52,52 @@ class HumanSize:
 def parse_file_info(info: str):
     item = [i for i in info.split(" ") if i != ""]
 
-    modes, size, date, name = (item[0], item[1], ' '.join(item[1:3]), item[4])
+    modes, size, date, name = (item[0], item[1], ' '.join(item[2:4]), item[5])
 
     size = HumanSize.format(int(size), precision=2)
 
     return modes, size, date, name
 
+
+def get_file_properties(file_path):
+    _stat = os.stat(file_path)
+    message = []
+
+    def _get_file_mode():
+        modes = [
+            stat.S_IRUSR,  # ~ Owner has read permission.
+            stat.S_IWUSR,  # ~ Owner has write permission.
+            stat.S_IXUSR,  # ~ Owner has execute permission.
+            stat.S_IRGRP,  # ~ Group has read permission.
+            stat.S_IWGRP,  # ~ Group has write permission
+            stat.S_IXGRP,  # ~ Group has execute permission.
+            stat.S_IROTH,  # ~ Others have read permission.
+            stat.S_IWOTH,  # ~ Others have write permission.
+            stat.S_IXOTH,  # ~ Others have execute permission.
+        ]
+
+        mode = _stat.st_mode
+        full_mode = ""
+        full_mode += "d" if os.path.isdir(file_path) else "-"
+
+        for i in range(9):
+            full_mode += bool(mode & modes[i]) and 'rwxrwxrwx'[i] or '-'
+        return full_mode
+
+    def _get_size():
+        return str(_stat.st_size)
+
+    def _get_last_time():
+        return time.strftime("%b %d %H:%M", time.gmtime(_stat.st_mtime))
+
+    for function in ("_get_file_mode()", "_get_size()", "_get_last_time()"):
+        message.append(eval(function))
+
+    # ^Add file name
+    message.append(os.path.basename(file_path))
+
+    return " ".join(message)
+
+
+def path_parser(path: str):
+    return path if path.endswith(os.path.sep) else path + os.path.sep

@@ -50,9 +50,10 @@ class BaseWidget(QWidget):
         self.hBox1 = QHBoxLayout()
         self.hBox2 = QHBoxLayout()
 
+        self.hBox1.addWidget(self.homeButton)
         self.hBox1.addWidget(self.pathEdit)
         self.hBox2.addWidget(self.backButton)
-        self.hBox2.addWidget(self.nextButton)
+        # self.hBox2.addWidget(self.nextButton)
         self.hBox2.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         self.gLayout = QVBoxLayout()
@@ -65,12 +66,13 @@ class BaseWidget(QWidget):
 
     def create_file_list(self):
         self.fileList = QTreeWidget()
-        self.fileList.setIconSize(QSize(20, 20))
+        self.fileList.setIconSize(QSize(25, 25))
         self.fileList.setRootIsDecorated(False)
         # self.fileList.setHeaderLabels(('Name', 'Size', 'Owner', 'Group', 'Time', 'Mode'))
-        self.fileList.setHeaderLabels(('Name', 'Size', 'Time'))
+        self.fileList.setHeaderLabels(('Name', 'Size', 'Time', 'Mode'))
         self.fileList.header().setStretchLastSection(True)
         self.fileList.setSortingEnabled(True)
+        # self.fileList.setModel(self.fileModel)
 
     def menu_context_tree(self, point):
         index = self.fileList.indexAt(point)
@@ -111,6 +113,11 @@ class LocalWidget(BaseWidget):
         self.hBox2.addWidget(self.uploadButton)
         self.hBox2.addWidget(self.connectButton)
         self.groupBox.setTitle('Local')
+
+        # New pick location button
+        self.pickDirButton = QPushButton()
+        self.pickDirButton.setIcon(QFileIconProvider.icon(QFileIconProvider(), QFileIconProvider.Folder))
+        self.hBox1.addWidget(self.pickDirButton)
 
 
 if __name__ == '__main__':

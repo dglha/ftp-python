@@ -231,7 +231,7 @@ class ServerWorker(Thread):
         :param dir_path: path to go
         :return: 250 Requested file action okay, completed.
         """
-        dir_path = os.path.join(self.cwd, dir_path)
+        dir_path = dir_path.endswith(os.path.sep) and dir_path or os.path.join(self.cwd, dir_path)
         if not os.path.exists(dir_path) and not os.path.isdir(dir_path):
             self.send_message("CWD false, directory not exists. \r\n")
             return
