@@ -9,8 +9,10 @@ from PyQt5.QtWidgets import *
 from ftplib import FTP
 from urllib.parse import urlparse
 
+from GUI.Dialogs.dialogs import ProgressDialog
 from GUI.GuiWidget import LocalWidget, RemoteWidget
 from BaseWindow import Ui_MainWindow
+from Worker.ThreadWorker import ThreadWorker, DownloadWorker, UploadWorker
 from utils import parse_file_info, get_file_properties, path_parser
 from queue import LifoQueue as stack
 
@@ -32,6 +34,14 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.username = ""
         self.password = ""
 
+        # Dialog
+        self.downloadProgressDialog = ProgressDialog()
+        self.uploadProgressDialog = ProgressDialog()
+
+        # Progress dict
+        self.downloadProgress = {}
+        self.uploadProgress = {}
+
         # pwd
         self.local_pwd = "F:\Project\Python\demo\\"
         self.pwd = ""  # Remote dir
@@ -48,6 +58,10 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.localOriginPath = self.local_pwd
         self.getLocalFile()
 
+        self.thread = QThread()
+        self.threadpool = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+
         self.remoteOriginPath = ""
 
         # Path history
@@ -62,12 +76,15 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.remote.fileList.itemDoubleClicked.connect(self.cdToRemoteDir)
         self.remote.homeButton.clicked.connect(self.cdToOriginRemoteDir)
         self.remote.backButton.clicked.connect(self.cdBackHistoryRemoteDir)
+        self.remote.downloadButton.clicked.connect(self.downloadFile)
+        # self.thread.finished.connect(self.progressDialog.show)
 
         self.local.pathEdit.returnPressed.connect(self.cdLocalPath)
         self.local.fileList.itemDoubleClicked.connect(self.cdToLocalDir)
         self.local.homeButton.clicked.connect(self.cdToOriginLocalDir)
         self.local.backButton.clicked.connect(self.cdBackHistoryLocalDir)
         self.local.pickDirButton.clicked.connect(self.pickLocalDir)
+        self.local.uploadButton.clicked.connect(self.uploadFile)
 
     def initRemoteWidget(self):
         self.pwd = self.ftp.pwd()
@@ -145,7 +162,6 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
             # Use custom icon
             fileIcon = icon("icons8-folder-240.png")
-            print(fileName)
             self.remoteWordList.append(fileName)
             path = os.path.join(self.pwd, fileName)
             self.remoteDir[path] = True
@@ -164,9 +180,9 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         self.remote.fileList.addTopLevelItem(item)
         # Set cursor to first item on list files/folders
-        # if not self.remote.fileList.currentItem():
-        #     self.remote.fileList.setCurrentItem(self.remote.fileList.topLevelItem(0))
-        #     self.remote.fileList.setEnabled(True)
+        if not self.remote.fileList.currentItem():
+            self.remote.fileList.setCurrentItem(self.remote.fileList.topLevelItem(0))
+            self.remote.fileList.setEnabled(True)
 
     def getLocalFile(self):
         self.localWordList = []
@@ -294,6 +310,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
     """
         LOCAL FUNCS
     """
+
     def isLocalDir(self, dirname):
         return self.localDir.get(dirname, None)
 
@@ -367,8 +384,77 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
             self.local.pathEdit.setText(self.local_pwd)
             self.getLocalFile()
 
+    """
+        UPLOAD - DOWNLOAD FUNCS
+    """
+
+    def downloadFile(self):
+        # self.thread = QThread()
+        # self.thread.started.connect(self.handleDownload)
+        # self.thread.start()
+        fileItem = self.remote.fileList.currentItem()
+        sourceFile = os.path.join(self.pwd, fileItem.text(0))
+        destinationFile = os.path.join(self.local_pwd, fileItem.text(0))
+
+        fileSize = self.ftp.size(fileItem.text(0))
+
+        temp = FTP()
+        temp.connect(self.hostname, port=21, timeout=5)
+        temp.login(self.username, self.password)
+        temp.cwd(path_parser(self.pwd))
+
+        worker = DownloadWorker(file_name=fileItem.text(0), file_size=fileSize, source_file=sourceFile,
+                                destination_file=destinationFile, ftp=temp)
+
+        worker.signals.progress.connect(self.setDownloadProgressDialogProcess)
+        worker.signals.finished.connect(self.getLocalFile)
+
+        self.downloadProgress[sourceFile] = self.downloadProgressDialog.addProgress(
+            "Download", fileItem.text(0), fileSize
+        )
+
+        self.downloadProgressDialog.show()
+
+        self.threadpool.start(worker)
+
+    def uploadFile(self):
+        fileItem = self.local.fileList.currentItem()
+        sourceFile = os.path.join(self.local_pwd, fileItem.text(0))
+        destinationFile = os.path.join(self.pwd, fileItem.text(0))
+
+        print(sourceFile)
+
+        fileSize = os.path.getsize(sourceFile)
+        print(fileSize)
+
+        temp = FTP()
+        temp.connect(self.hostname, port=21, timeout=5)
+        temp.login(self.username, self.password)
+        temp.cwd(path_parser(self.pwd))
+
+        uploadWorker = UploadWorker(file_name=fileItem.text(0), file_size=fileSize, source_file=sourceFile,
+                                    destination_file=destinationFile, ftp=temp)
+
+        uploadWorker.signals.progress.connect(self.setUploadProgressDialogProcess)
+        uploadWorker.signals.finished.connect(self.getRemoteFiles)
+
+        self.uploadProgress[sourceFile] = self.uploadProgressDialog.addProgress(
+            "Upload", fileItem.text(0), fileSize
+        )
+
+        self.uploadProgressDialog.show()
+
+        self.threadpool.start(uploadWorker)
+
+    def setDownloadProgressDialogProcess(self, n, file_name):
+        self.downloadProgress[file_name].set_value(n)
+
+    def setUploadProgressDialogProcess(self, n, file_name):
+        self.uploadProgress[file_name].set_value(n)
+
+
 app = QtWidgets.QApplication(sys.argv)
 
 window = ClientGUI()
 window.show()
-app.exec()
+sys.exit(app.exec())
