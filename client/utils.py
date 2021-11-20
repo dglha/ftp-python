@@ -52,8 +52,9 @@ class HumanSize:
 def parse_file_info(info: str):
     item = [i for i in info.split(" ") if i != ""]
 
-    modes, size, date, name = (item[0], item[1], ' '.join(item[2:4]), item[5])
+    modes, size, date, name = (item[0], item[1], ' '.join(item[2:4]), item[5:])
 
+    name = " ".join(name)
     size = HumanSize.format(int(size), precision=2)
 
     return modes, size, date, name
