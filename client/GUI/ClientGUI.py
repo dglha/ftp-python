@@ -15,12 +15,7 @@ from BaseWindow import Ui_MainWindow
 from Worker.ThreadWorker import ThreadWorker, DownloadWorker, UploadWorker
 from utils import parse_file_info, get_file_properties, path_parser
 from queue import LifoQueue as stack
-
-RED_COLOR = QColor(255, 0, 0)
-GREEN_COLOR = QColor(0, 255, 0)
-BLUE_COLOR = QColor(0, 0, 255)
-BLACK_COLOR = QColor(0, 0, 0)
-MAX_SIZE = 20
+from constant import *
 
 icon_path = os.path.join(os.path.dirname(__file__), 'icons')
 icon = lambda icon_name: QIcon(os.path.join(icon_path, icon_name))
