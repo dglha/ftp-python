@@ -26,12 +26,12 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
-      <x>10</x>
+      <x>450</x>
       <y>10</y>
-      <width>831</width>
+      <width>751</width>
       <height>30</height>
      </rect>
     </property>
@@ -40,7 +40,7 @@
       <widget class="QLabel" name="userLabel">
        <property name="font">
         <font>
-         <family>Arial</family>
+         <family>MS Shell Dlg 2</family>
          <pointsize>9</pointsize>
         </font>
        </property>
@@ -56,7 +56,7 @@
       <widget class="QLabel" name="passLabel">
        <property name="font">
         <font>
-         <family>Arial</family>
+         <family>MS Shell Dlg 2</family>
          <pointsize>9</pointsize>
         </font>
        </property>
@@ -79,7 +79,7 @@
       <widget class="QLabel" name="hostLabel">
        <property name="font">
         <font>
-         <family>Arial</family>
+         <family>MS Shell Dlg 2</family>
          <pointsize>9</pointsize>
         </font>
        </property>
@@ -100,26 +100,38 @@
      </item>
     </layout>
    </widget>
-   <widget class="QTextEdit" name="statusTextEdit">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>50</y>
-      <width>1201</width>
-      <height>87</height>
-     </rect>
-    </property>
-   </widget>
    <widget class="QWidget" name="horizontalLayoutWidget">
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>150</y>
+      <y>200</y>
       <width>1201</width>
-      <height>631</height>
+      <height>581</height>
      </rect>
     </property>
     <layout class="QHBoxLayout" name="mainLayout"/>
+   </widget>
+   <widget class="QGroupBox" name="logGroupBox">
+    <property name="geometry">
+     <rect>
+      <x>19</x>
+      <y>49</y>
+      <width>1181</width>
+      <height>151</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Logs</string>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <item>
+      <widget class="QTextEdit" name="statusTextEdit">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -135,6 +147,8 @@
     <property name="title">
      <string>File</string>
     </property>
+    <addaction name="actionUpload"/>
+    <addaction name="actionDownload"/>
     <addaction name="actionExit"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
@@ -155,6 +169,16 @@
   <action name="actionExit">
    <property name="text">
     <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionDownload">
+   <property name="text">
+    <string>Download</string>
+   </property>
+  </action>
+  <action name="actionUpload">
+   <property name="text">
+    <string>Upload</string>
    </property>
   </action>
  </widget>

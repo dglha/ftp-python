@@ -82,8 +82,10 @@ class UploadProgressWidget(BaseProgressWidget):
 
 
 class ProgressDialog(QMainWindow):
-    def __init__(self):
+    def __init__(self, title, icon):
         super().__init__()
+        self.setWindowTitle(title)
+        self.setWindowIcon(icon)
         self.resize(500, 110)
         self.scrollArea = QScrollArea()
         self.scrollArea.setWidgetResizable(True)
@@ -102,7 +104,7 @@ class ProgressDialog(QMainWindow):
 
     def addProgress(self, type, title, size):
         if type not in ['Download', 'Upload']:
-            raise str("type must 'download' or 'upload'")
+            raise str("type must 'Download' or 'Upload'")
 
         if type == 'Download':
             pb = DownloadProgressWidget(text=title)

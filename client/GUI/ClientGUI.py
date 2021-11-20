@@ -19,6 +19,7 @@ from queue import LifoQueue as stack
 RED_COLOR = QColor(255, 0, 0)
 GREEN_COLOR = QColor(0, 255, 0)
 BLUE_COLOR = QColor(0, 0, 255)
+BLACK_COLOR = QColor(0, 0, 0)
 MAX_SIZE = 20
 
 icon_path = os.path.join(os.path.dirname(__file__), 'icons')
@@ -29,14 +30,17 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+        self.setWindowTitle("FileSent")
+        self.setWindowIcon(icon("icons8-folder-240.png"))
+
         self.ftp = FTP()
         self.hostname = ""
         self.username = ""
         self.password = ""
 
         # Dialog
-        self.downloadProgressDialog = ProgressDialog()
-        self.uploadProgressDialog = ProgressDialog()
+        self.downloadProgressDialog = ProgressDialog("Download", icon("icons8-download-96.png"))
+        self.uploadProgressDialog = ProgressDialog("Upload", icon("icons8-upload-96.png"))
 
         # Progress dict
         self.downloadProgress = {}
@@ -92,7 +96,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.remote.pathEdit.setText(self.pwd)
         self.getRemoteFiles()
 
-    def appendToStatus(self, log: str, color):
+    def appendToStatus(self, log: str, color=BLACK_COLOR):
         self.statusTextEdit.append(log)
         self.statusTextEdit.setTextColor(color)
 
@@ -103,6 +107,18 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.mainLayout.addWidget(self.local)
         self.mainLayout.addWidget(self.remote)
         self.mainLayout.setSpacing(0)
+
+        # TextEdit Status
+        self.statusTextEdit.setReadOnly(True)
+        sb = self.statusTextEdit.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+        # Menu bar
+        self.actionDownload.setIcon(icon("icons8-download-96.png"))
+        self.actionDownload.triggered.connect(self.downloadProgressDialog.show)
+        self.actionUpload.setIcon(icon("icons8-upload-96.png"))
+        self.actionUpload.triggered.connect(self.uploadProgressDialog.show)
+        self.actionExit.setIcon(icon("icons8-cancel-96.png"))
 
     def createConnect(self):
         # if not self.hostname:
@@ -131,6 +147,9 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         self.connectButton.setEnabled(True)
         self.connectButton.setText("Connect")
+
+        # Reset windows title
+        self.setWindowTitle(f"FileSend - {self.username} - {self.hostname}")
 
         self.initRemoteWidget()
 
@@ -278,6 +297,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         if pathname != self.remoteOriginPath:
             self.remote.homeButton.setEnabled(True)
 
+        self.appendToStatus(f"Cd to remote: {self.pwd}")
+
     def cdToOriginRemoteDir(self):
         try:
             self.ftp.cwd(self.remoteOriginPath + os.path.sep)
@@ -288,6 +309,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.getRemoteFiles()
         self.remote.pathEdit.setText(self.pwd)
         self.remote.homeButton.setEnabled(False)
+
+        self.appendToStatus("Cd to remote HOME")
 
     def cdBackHistoryRemoteDir(self):
         if self.remoteHistory.empty():
@@ -306,6 +329,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.ftp.cwd(pathname)
         self.getRemoteFiles()
         self.remote.pathEdit.setText(pathname)
+
+        self.appendToStatus(f"Cd to remote: {self.pwd}")
 
     """
         LOCAL FUNCS
@@ -337,6 +362,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         else:
             self.local.homeButton.setEnabled(False)
 
+        self.appendToStatus(f"Cd to local: {self.local_pwd}")
+
     def cdToLocalDir(self, item: QTreeWidgetItem, column):
         pathname = os.path.join(self.local_pwd, str(item.text(0)))
 
@@ -356,6 +383,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         if pathname != self.localOriginPath:
             self.local.homeButton.setEnabled(True)
 
+        self.appendToStatus(f"Cd to local: {self.local_pwd}")
+
     def cdToOriginLocalDir(self):
         self.local_pwd = self.localOriginPath
         self.getLocalFile()
@@ -374,6 +403,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.getLocalFile()
         self.local.pathEdit.setText(pathname)
 
+        self.appendToStatus(f"Cd to local: {self.local_pwd}")
+
     def pickLocalDir(self):
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.DirectoryOnly)
@@ -383,6 +414,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
             self.local_pwd = os.path.abspath(pathname[0])
             self.local.pathEdit.setText(self.local_pwd)
             self.getLocalFile()
+            self.appendToStatus(f"Cd to local: {self.local_pwd}")
 
     """
         UPLOAD - DOWNLOAD FUNCS
@@ -453,8 +485,9 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.uploadProgress[file_name].set_value(n)
 
 
-app = QtWidgets.QApplication(sys.argv)
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
 
-window = ClientGUI()
-window.show()
-sys.exit(app.exec())
+    window = ClientGUI()
+    window.show()
+    sys.exit(app.exec())
