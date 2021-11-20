@@ -231,7 +231,7 @@ class ServerWorker(Thread):
         :param dir_path: path to go
         :return: 250 Requested file action okay, completed.
         """
-        dir_path = os.path.join(self.cwd, dir_path)
+        dir_path = dir_path.endswith(os.path.sep) and dir_path or os.path.join(self.cwd, dir_path)
         if not os.path.exists(dir_path) and not os.path.isdir(dir_path):
             self.send_message("CWD false, directory not exists. \r\n")
             return
@@ -401,12 +401,8 @@ class ServerWorker(Thread):
         self.create_data_socket()
 
         with open(path, file_write_type) as file:
-            print("asdf")
-            print(self.client_data_socket)
             data = self.client_data_socket.recv(SIZE)
-            print("DATA: ", data)
             while data:
-                print("DATA: ", data)
                 file.write(data)
                 data = self.client_data_socket.recv(SIZE)
 
@@ -545,6 +541,20 @@ class ServerWorker(Thread):
             text += f"{key}: {info[key]}\r\n"
 
         self.send_message("215 System information:\r\n" + text)
+
+    def SIZE(self, file_name):
+        path = os.path.join(self.cwd, file_name)
+        if not os.path.exists(path):
+            return
+
+        # self.create_data_socket()
+
+        size = str(os.path.getsize(path))
+
+        # self.send_data(size.encode())
+
+        # self.stop_data_socket()
+        self.send_message(f"213 {size}\r\n")
 
     def welcome(self):
         info = get_sys_info()
