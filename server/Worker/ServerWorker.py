@@ -12,6 +12,7 @@ from settings import *
 import re
 import shutil
 import sqlalchemy as db
+from pathlib import Path
 
 engine = db.create_engine("sqlite:///fpt_implement.sqlite", connect_args={'check_same_thread': False})
 connection = engine.connect()
@@ -19,6 +20,7 @@ DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 ALLOW_DELETE = True
+ALLOW_WRITE = True
 
 
 def authorization(func):
@@ -38,7 +40,7 @@ def authorization(func):
 class ServerWorker(Thread):
     def __init__(self, address, socket: socket.socket, host) -> None:
         Thread.__init__(self)
-        self.cwd = SERVER_DATA_PATH
+        self.cwd = Path(SERVER_DATA_PATH)
         self.client_address = address
         self.client_address_ip = address[0]
         self.client_address_port = address[1]
@@ -55,9 +57,18 @@ class ServerWorker(Thread):
         self.mode = None
 
         # Each user is a private space
-        self.root_cwd = SERVER_DATA_PATH
+        # First initialize
+        self.root_cwd = self.cwd
 
         print("started")
+
+    def initialize(self):
+        # Each user is a private space
+        self.root_cwd = self.root_cwd.joinpath(self.username)
+        # Create folder
+        if not self.root_cwd.exists():
+            self.root_cwd.mkdir()
+        self.cwd = self.root_cwd
 
     def run(self):
         self.send_message("220 Welcome.\r\n")
@@ -161,7 +172,6 @@ class ServerWorker(Thread):
         :return: 227 Code (h1,h2,h3,h4,p1,p2): h1-4: IP Address, p1-2: Port number
                  p1 * 256 + p2
         """
-        print("PASV")
         self.pasv_mode = True
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -173,6 +183,7 @@ class ServerWorker(Thread):
         p2 = port % 256
         # text = f"227 Entering Passive Mode ({','.join(address.split('.'))},{port >> 8 & 0xFF},{port & 0xFF}).\r\n"
         text = f"227 Entering Passive Mode ({','.join(address.split('.'))},{p1},{p2}).\r\n"
+        print(text)
         self.send_message(text)
 
     def PORT(self, command):
@@ -196,10 +207,11 @@ class ServerWorker(Thread):
         """
 
         if not dir_path:
-            path_name = os.path.abspath(os.path.join(self.cwd, "."))
+            # path_name = os.path.abspath(os.path.join(self.cwd, "."))
+            path_name = self.cwd.absolute()
         else:
-            path_name = os.path.abspath(os.path.join(self.cwd, dir_path))
-
+            # path_name = os.path.abspath(os.path.join(self.cwd, dir_path))
+            path_name = self.cwd.joinpath(dir_path)
         if not os.path.exists(path_name):
             self.send_message(
                 "550 Requested action not taken. File unavailable (e.g., file not found, no access)."
@@ -208,10 +220,12 @@ class ServerWorker(Thread):
 
         self.create_data_socket()
 
-        if os.path.isdir(path_name):
+        # if os.path.isdir(path_name):
+        if path_name.is_dir():
             # If path_name is dir
-            for file in os.listdir(path_name):
-                file_info = get_file_properties(os.path.join(path_name, file))
+            # for file in os.listdir(path_name):
+            for file in path_name.iterdir():
+                file_info = get_file_properties(file.absolute())
                 self.send_data((file_info + "\r\n").encode())
 
         else:  # path_name is path of file
@@ -238,6 +252,7 @@ class ServerWorker(Thread):
         :return: 257 Returns the current directory of the host.
         """
         # print(self.cwd)
+        print(self.cwd)
         self.send_message(f"257 \"{self.cwd}\". \r\n")
 
     @authorization
@@ -248,8 +263,12 @@ class ServerWorker(Thread):
         :param dir_path: path to go
         :return: 250 Requested file action okay, completed.
         """
-        dir_path = dir_path.endswith(os.path.sep) and dir_path or os.path.join(self.cwd, dir_path)
-        if not os.path.exists(dir_path) and not os.path.isdir(dir_path):
+        # dir_path = dir_path.endswith(os.path.sep) and dir_path or os.path.join(self.cwd, dir_path)
+        dir_path = Path(dir_path) if dir_path.endswith(os.path.sep) else self.cwd.joinpath(dir_path)
+        # if not os.path.exists(dir_path) and not os.path.isdir(dir_path):
+        if self.root_cwd not in dir_path.parents:
+            dir_path = self.root_cwd
+        elif not dir_path.exists() and not dir_path.is_dir():
             self.send_message("CWD false, directory not exists. \r\n")
             return
         self.cwd = dir_path
@@ -262,8 +281,9 @@ class ServerWorker(Thread):
 
         :return: 200 The requested action has been successfully completed.
         """
-        path = os.path.join(self.cwd, "..")
-        self.cwd = os.path.abspath(path)
+        # path = os.path.join(self.cwd, "..")
+        self.cwd = self.cwd.parent
+        # self.cwd = os.path.abspath(path)
         self.send_message("200 CDUP Successfully!\r\n")
 
     @authorization
@@ -309,7 +329,8 @@ class ServerWorker(Thread):
         """
         if not dir_name:
             self.send_message(f"MKD Failed - No directory name was provided!\r\n")
-        path = os.path.join(self.cwd, dir_name)
+        # path = os.path.join(self.cwd, dir_name)
+        path = self.cwd.joinpath(dir_name)
 
         try:
             os.mkdir(path)
@@ -330,7 +351,8 @@ class ServerWorker(Thread):
         """
         if not dir_name:
             self.send_message(f"MKD Failed - No directory name was provided!\r\n")
-        path = os.path.join(self.cwd, dir_name)
+        # path = os.path.join(self.cwd, dir_name)
+        path = self.cwd.joinpath(dir_name)
 
         if not ALLOW_DELETE:
             self.send_message(
@@ -338,11 +360,13 @@ class ServerWorker(Thread):
             )
 
         # ^If dir is not exists
-        elif not os.path.exists(path):
+        # elif not os.path.exists(path):
+        elif not path.exists():
             self.send_message(f"550 RMD failed - Directory {dir_name} not exists!\r\n")
 
         else:
-            shutil.rmtree(path=path)
+            # shutil.rmtree(path=path)
+            path.rmdir()
             self.send_message(f"250 RMD Directory deteled!\r\n")
 
     @authorization
@@ -353,10 +377,12 @@ class ServerWorker(Thread):
         :param file_name: File to delete
         :return: 250 File deleted
         """
-        path = os.path.join(self.cwd, file_name)
+        # path = os.path.join(self.cwd, file_name)
+        path = self.cwd.joinpath(file_name)
 
         # ^If file or dir is not exists
-        if not os.path.exists(path):
+        # if not os.path.exists(path):
+        if not path.exists():
             self.send_message(f"550 DELE failed File {file_name} not exists.\r\n")
 
         elif not ALLOW_DELETE:
@@ -364,6 +390,8 @@ class ServerWorker(Thread):
                 f"450 DELE failed - Detele operation not allow on this server! \r\n"
             )
 
+        elif not path.is_file():
+            self.send_message(f"550 DELE failed, {file_name} is directory.\r\n")
         else:
             # ^Delete file
             os.remove(path)
@@ -377,9 +405,9 @@ class ServerWorker(Thread):
     def PUT(self, file_name):
         """"""
         # ^Check if user is authenticated
-        if not self.is_authorization:
-            self.send_message("530 User not logged in!\r\n")
-            return
+        # if not self.is_authorization:
+        #     self.send_message("530 User not logged in!\r\n")
+        #     return
 
         self.send_message("200. Created data connection.\r\n")
         self.create_data_socket()
@@ -522,8 +550,11 @@ class ServerWorker(Thread):
             user = session.query(User).filter_by(username=self.username).first()
             if user.password != password:
                 self.send_message("530 Login incorrect - Wrong username or password error.\r\n")
+                self.username = None
 
             self.is_authorization = True
+            self.initialize()
+
             self.send_message("230 Logged on - Login successfully!\r\n")
         else:
             self.send_message("503 Bad sequence of commands - Syntax error\r\n")
