@@ -139,6 +139,24 @@ class CommandLineWorker(Thread):
             return
         self.send_message(command)
 
+    def MKD(self, dir_name):
+        command = "MKD"
+        if not self.is_authorized:
+            return
+        self.send_message(command + f" {dir_name}")
+
+    def RMD(self, dir_name):
+        command = "RMD"
+        if not self.is_authorized:
+            return
+        self.send_message(command + f" {dir_name}")
+
+    def DELE(self, file_name):
+        command = "DELE"
+        if not self.is_authorized:
+            return
+        self.send_message(command + f" {file_name}")
+
     def CAT(self, file_path):
         command = "CAT " + file_path
         if not self.is_authorized:
