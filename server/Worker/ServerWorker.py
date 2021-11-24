@@ -1,5 +1,6 @@
 import os
 import socket
+from functools import wraps
 from threading import Thread
 
 from sqlalchemy.orm import sessionmaker
@@ -20,6 +21,20 @@ session = DBSession()
 ALLOW_DELETE = True
 
 
+def authorization(func):
+    # def decorator(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        is_auth = self.is_authorization
+        # return check_authorization(is_auth)(func)(self, *args, **kwargs)
+        if not is_auth:
+            return self.client_socket.send("530 User not logged in!".encode("utf-8"))
+        return func(self, *args, **kwargs)
+
+    return wrapper
+    # return decorator
+
+
 class ServerWorker(Thread):
     def __init__(self, address, socket: socket.socket, host) -> None:
         Thread.__init__(self)
@@ -38,6 +53,9 @@ class ServerWorker(Thread):
         self.is_authorization = False
         self.client_data_socket = None
         self.mode = None
+
+        # Each user is a private space
+        self.root_cwd = SERVER_DATA_PATH
 
         print("started")
 
@@ -124,13 +142,13 @@ class ServerWorker(Thread):
         FUNCS
     """
 
-    def TYPE(self, type):
+    def TYPE(self, type_):
         """
         Sets the transfer mode (ASCII/Binary)
-        :param type: "I": Binary, "A": ASCII
+        :param type_: "I": Binary, "A": ASCII
         :return: 200 Code
         """
-        self.mode = type
+        self.mode = type_
         if self.mode == "I":
             self.send_message("200 binary mode. \r\n")
         elif self.mode == "A":
@@ -167,6 +185,7 @@ class ServerWorker(Thread):
         # TODO - implement PORT command
         pass
 
+    @authorization
     def LIST(self, dir_path):
         """
         Returns information of a file or directory if specified,
@@ -180,10 +199,6 @@ class ServerWorker(Thread):
             path_name = os.path.abspath(os.path.join(self.cwd, "."))
         else:
             path_name = os.path.abspath(os.path.join(self.cwd, dir_path))
-
-        if not self.is_authorization:
-            self.send_message("530 User not logged in!")
-            return
 
         if not os.path.exists(path_name):
             self.send_message(
@@ -215,6 +230,7 @@ class ServerWorker(Thread):
         """
         self.LIST(dir_path)
 
+    @authorization
     def PWD(self, *args):
         """
         Print working directory.
@@ -224,6 +240,7 @@ class ServerWorker(Thread):
         # print(self.cwd)
         self.send_message(f"257 \"{self.cwd}\". \r\n")
 
+    @authorization
     def CWD(self, dir_path):
         """
         Change working directory.
@@ -238,6 +255,7 @@ class ServerWorker(Thread):
         self.cwd = dir_path
         self.send_message("250 CWD Successfully!\r\n")
 
+    @authorization
     def CDUP(self, *args):
         """
         Change to Parent Directory.
@@ -248,6 +266,7 @@ class ServerWorker(Thread):
         self.cwd = os.path.abspath(path)
         self.send_message("200 CDUP Successfully!\r\n")
 
+    @authorization
     def CAT(self, file_path):
         """
         Display content of file (md, txt only)
@@ -280,6 +299,7 @@ class ServerWorker(Thread):
         self.stop_data_socket()
         self.send_message("226 Closing data connection. \r\n")
 
+    @authorization
     def MKD(self, dir_name):
         """
         Make directory.
@@ -290,20 +310,17 @@ class ServerWorker(Thread):
         if not dir_name:
             self.send_message(f"MKD Failed - No directory name was provided!\r\n")
         path = os.path.join(self.cwd, dir_name)
-        if not self.is_authorization:
-            self.send_message("530 User not logged in!\r\n")
 
-        else:
-            # ^Create new dir with dir_)name provided
-            try:
-                os.mkdir(path)
-                self.send_message(f"257 MKD Directory created - {dir_name}.\r\n")
-            except OSError as e:
-                print(e)
-                self.send_message(
-                    f"550 MKD failed - Directory {dir_name} already exists.\r\n"
-                )
+        try:
+            os.mkdir(path)
+            self.send_message(f"257 MKD Directory created - {dir_name}.\r\n")
+        except OSError as e:
+            print(e)
+            self.send_message(
+                f"550 MKD failed - Directory {dir_name} already exists.\r\n"
+            )
 
+    @authorization
     def RMD(self, dir_name):
         """
         Remove a directory.
@@ -315,11 +332,7 @@ class ServerWorker(Thread):
             self.send_message(f"MKD Failed - No directory name was provided!\r\n")
         path = os.path.join(self.cwd, dir_name)
 
-        # ^Check if user is authenticated
-        if not self.is_authorization:
-            self.send_message("530 User not logged in!\r\n")
-
-        elif not ALLOW_DELETE:
+        if not ALLOW_DELETE:
             self.send_message(
                 f"450 RMD failed - Detele operation not allow on this server! \r\n"
             )
@@ -332,6 +345,7 @@ class ServerWorker(Thread):
             shutil.rmtree(path=path)
             self.send_message(f"250 RMD Directory deteled!\r\n")
 
+    @authorization
     def DELE(self, file_name):
         """
         Delete file.
@@ -341,12 +355,8 @@ class ServerWorker(Thread):
         """
         path = os.path.join(self.cwd, file_name)
 
-        # ^Check if user is authenticated
-        if not self.is_authorization:
-            self.send_message("530 User not logged in!\r\n")
-
         # ^If file or dir is not exists
-        elif not os.path.exists(path):
+        if not os.path.exists(path):
             self.send_message(f"550 DELE failed File {file_name} not exists.\r\n")
 
         elif not ALLOW_DELETE:
@@ -363,6 +373,7 @@ class ServerWorker(Thread):
         SOCKET RECEIVE - SEND FUNC
     """
 
+    @authorization
     def PUT(self, file_name):
         """"""
         # ^Check if user is authenticated
@@ -383,6 +394,7 @@ class ServerWorker(Thread):
 
         self.stop_data_socket()
 
+    @authorization
     def STOR(self, file_name):
         """
         Accept the data and to store the data as a file at the server site
@@ -390,9 +402,9 @@ class ServerWorker(Thread):
         :param file_name: File to send
         :return: 226 Transfer completed
         """
-        if not self.is_authorization:
-            self.send_message("530 User not logged in!\r\n")
-            return
+        # if not self.is_authorization:
+        #     self.send_message("530 User not logged in!\r\n")
+        #     return
 
         path = os.path.join(self.cwd, file_name)
 
@@ -411,11 +423,12 @@ class ServerWorker(Thread):
 
     """ Send file to client """
 
+    @authorization
     def GET(self, file_name):
         # ^Check if user is authenticated
-        if not self.is_authorization:
-            self.send_message("530 User not logged in!\r\n")
-            return
+        # if not self.is_authorization:
+        #     self.send_message("530 User not logged in!\r\n")
+        #     return
 
         path = os.path.join(self.cwd, file_name)
         if not file_name:
@@ -447,6 +460,7 @@ class ServerWorker(Thread):
     #     self.rest = True
     #     self.send_message("250 File position reseted.\r\n")
 
+    @authorization
     def RETR(self, file_name):
         """
         Retrieve a copy of the file
@@ -529,6 +543,7 @@ class ServerWorker(Thread):
     """
         UTILS FUNC
     """
+
     def SYS(self, *args):
         """
         Get system info
@@ -542,6 +557,7 @@ class ServerWorker(Thread):
 
         self.send_message("215 System information:\r\n" + text)
 
+    @authorization
     def SIZE(self, file_name):
         path = os.path.join(self.cwd, file_name)
         if not os.path.exists(path):
