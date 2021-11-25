@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import *
 from .Menu.RemoteMenu import RemoteMenu
 
 
-
 class BaseWidget(QWidget):
     def __init__(self):
         super().__init__()

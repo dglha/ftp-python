@@ -16,10 +16,13 @@ from Worker.ThreadWorker import ThreadWorker, DownloadWorker, UploadWorker
 from utils import parse_file_info, get_file_properties, path_parser, clearQTreeWidget
 from queue import LifoQueue as stack
 from constant import *
-from functools import partial
+from pathlib import Path
 
 icon_path = os.path.join(os.path.dirname(__file__), 'icons')
-icon = lambda icon_name: QIcon(os.path.join(icon_path, icon_name))
+
+
+def icon(icon_name):
+    return QIcon(os.path.join(icon_path, icon_name))
 
 
 class ClientGUI(QMainWindow, Ui_MainWindow):
@@ -43,7 +46,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.uploadProgress = {}
 
         # pwd
-        self.local_pwd = "F:\Project\Python\demo\\"
+        self.local_pwd = str(Path.home())
         self.pwd = ""  # Remote dir
 
         # Current working dir
@@ -52,6 +55,10 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         # GUI Widget
         self.setupWidget()
+        self.remoteWordList = []
+        self.remoteDir = {}
+        self.localWordList = []
+        self.localDir = {}
 
         # Path edit
         self.local.pathEdit.setText(self.local_pwd)
@@ -70,7 +77,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         #     Add slot to signal
 
-        self.connectButton.clicked.connect(lambda: Thread(target=self.createConnect).start())
+        # self.connectButton.clicked.connect(lambda: Thread(target=self.createConnect).start())
+        self.connectButton.clicked.connect(self.createConnect)
 
         # Remote menu
         self.remote.fileList.customContextMenuRequested.connect(self.remote_menu_context_tree)
@@ -95,6 +103,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.local.uploadButton.clicked.connect(self.uploadFile)
 
     def initRemoteWidget(self):
+        self.setRemoteBool(True)
         self.pwd = self.ftp.pwd()
         self.remoteOriginPath = self.pwd
         self.remote.pathEdit.setText(self.pwd)
@@ -103,7 +112,6 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
     def appendToStatus(self, log: str, color=BLACK_COLOR):
         self.statusTextEdit.setTextColor(color)
         self.statusTextEdit.append(log)
-
 
     def remote_menu_context_tree(self, point):
         index = self.remote.fileList.indexAt(point)
@@ -119,6 +127,9 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
     def setupWidget(self):
         self.local = LocalWidget()
         self.remote = RemoteWidget()
+
+        # Disable remote
+        self.setRemoteBool(False)
 
         self.mainLayout.addWidget(self.local)
         self.mainLayout.addWidget(self.remote)
@@ -136,6 +147,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.actionUpload.triggered.connect(self.uploadProgressDialog.show)
         self.actionExit.setIcon(icon("icons8-cancel-96.png"))
         self.actionExit.triggered.connect(self.disconnect)
+        self.actionAbout.triggered.connect(self.showAboutAction)
 
         # Set remote widget icon
         self.remote.createDirButton.setIcon(icon("icons8-add-folder-96.png"))
@@ -148,22 +160,25 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         self.connectButton.setEnabled(False)
         self.connectButton.setText("Connecting...")
-        # result = QInputDialog.getText(self, 'Connect to Host', 'Host Address', QLineEdit.Normal)
 
         try:
             response = self.ftp.connect(self.hostname, port=21, timeout=2)
             self.appendToStatus(response, BLUE_COLOR)
         except Exception as err:
             self.statusTextEdit.append(str(err))
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Warning)
-            msg.setText("Error when connect to host!")
+            self.showErrorMsg(str(err))
+            return
         finally:
             self.connectButton.setEnabled(True)
             self.connectButton.setText("Connect")
 
-        response = self.ftp.login(user=self.username, passwd=self.password)
-        self.statusTextEdit.append(response)
+        try:
+            response = self.ftp.login(user=self.username, passwd=self.password)
+        except Exception as e:
+            self.ftp.quit()
+            self.appendToStatus(str(e), RED_COLOR)
+            self.showErrorMsg(str(e))
+            return
 
         self.connectButton.setEnabled(True)
         self.connectButton.setText("Connect")
@@ -171,18 +186,18 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         # Reset windows title
         self.setWindowTitle(f"FileSend - {self.username} - {self.hostname}")
 
+        self.showSuccessMsg("Login", "Login successfully!")
+        self.clearInputInfo()
         self.initRemoteWidget()
-
-    def clearInputInfo(self):
-        self.hostLineEdit.setText("")
-        self.userLineEdit.setText("")
-        self.passLineEdit.setText("")
 
     def disconnect(self):
         try:
             response = self.ftp.quit()
+            self.setRemoteBool(False)
+            self.clearRemoteWidget()
             self.appendToStatus(response)
         except Exception as e:
+            self.showErrorMsg(str(e))
             self.appendToStatus(str(e), RED_COLOR)
 
     def getRemoteFiles(self):
@@ -297,7 +312,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         else:
             self.remote.homeButton.setEnabled(False)
 
-    def cdToRemoteDir(self, item: QTreeWidgetItem, column):
+    def cdToRemoteDir(self, item: QTreeWidgetItem):
         pathname = os.path.join(self.pwd, str(item.text(0)))
 
         if not self.isRemoteDir(pathname):
@@ -417,9 +432,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
                 return
 
             self.appendToStatus(status, BLUE_COLOR)
-            QMessageBox.about(self, "Rename","Rename successfully!")
+            QMessageBox.about(self, "Rename", "Rename successfully!")
             self.getRemoteFiles()
-
 
     """
         LOCAL FUNCS
@@ -509,11 +523,20 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         UPLOAD - DOWNLOAD FUNCS
     """
 
+    def checkIsDir(self, file_name: str, file_dict: dict):
+        return file_name in file_dict and file_dict[file_name] == True
+
     def downloadFile(self):
         # self.thread = QThread()
         # self.thread.started.connect(self.handleDownload)
         # self.thread.start()
         fileItem = self.remote.fileList.currentItem()
+        if not fileItem:
+            self.showErrorMsg("Please choose a file to download!")
+            return
+        if not self.checkIsDir(fileItem.text(0), self.remoteDir):
+            self.showErrorMsg("Cannot download directory!")
+            return
         sourceFile = os.path.join(self.pwd, fileItem.text(0))
         destinationFile = os.path.join(self.local_pwd, fileItem.text(0))
 
@@ -540,6 +563,12 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
     def uploadFile(self):
         fileItem = self.local.fileList.currentItem()
+        if not fileItem:
+            self.showErrorMsg("Please choose a file to upload!")
+            return
+        if not self.checkIsDir(fileItem.text(0), self.localDir):
+            self.showErrorMsg("Cannot upload directory!")
+            return
         sourceFile = os.path.join(self.local_pwd, fileItem.text(0))
         destinationFile = os.path.join(self.pwd, fileItem.text(0))
 
@@ -566,6 +595,35 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.uploadProgressDialog.show()
 
         self.threadpool.start(uploadWorker)
+
+    """
+        CLIENT FUNCS
+    """
+
+    def showErrorMsg(self, msg: str):
+        e = QErrorMessage(self)
+        e.setWindowTitle("Error")
+        e.showMessage(msg)
+
+    def showSuccessMsg(self, title: str, msg: str):
+        e = QMessageBox.information(self, title, msg)
+
+    def setRemoteBool(self, b: bool):
+        self.remote.setEnabled(b)
+        self.local.uploadButton.setEnabled(b)
+
+    def clearRemoteWidget(self):
+        self.remote.pathEdit.setText("")
+        self.local.uploadButton.setEnabled(False)
+        clearQTreeWidget(self.remote.fileList)
+
+    def clearInputInfo(self):
+        self.hostLineEdit.setText("")
+        self.userLineEdit.setText("")
+        self.passLineEdit.setText("")
+
+    def showAboutAction(self):
+        QMessageBox.about(self, "FileSend", "FTP Implement application\r\nBy dlha & ndphuc.")
 
     def setDownloadProgressDialogProcess(self, n, file_name):
         self.downloadProgress[file_name].set_value(n)

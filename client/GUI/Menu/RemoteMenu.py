@@ -4,7 +4,11 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMenu, QMainWindow, QAction
 
 icon_path = os.path.join('GUI\\icons')
-icon = lambda icon_name: QIcon(os.path.join(icon_path, icon_name))
+
+
+def icon(icon_name):
+    return QIcon(os.path.join(icon_path, icon_name))
+
 
 class RemoteMenu(QMenu):
     def __init__(self, parent):
