@@ -50,6 +50,7 @@ class ServerWorker(Thread):
         self.HOST = host
         self.rest = False
         self.pos = 0
+        self.rnfr = ""
         # Auth
         self.username = None
         self.is_authorization = False
@@ -366,8 +367,11 @@ class ServerWorker(Thread):
 
         else:
             # shutil.rmtree(path=path)
-            path.rmdir()
-            self.send_message(f"250 RMD Directory deteled!\r\n")
+            try:
+                path.rmdir()
+                self.send_message(f"250 RMD Directory deteled!\r\n")
+            except Exception as e:
+                self.send_message(f"550 RMD failed - {e}\r\n")
 
     @authorization
     def DELE(self, file_name):
@@ -396,6 +400,48 @@ class ServerWorker(Thread):
             # ^Delete file
             os.remove(path)
             self.send_message("250 DELE File deleted.\r\n")
+
+    @authorization
+    def RNFR(self, file_name):
+        """
+        Choose file or dir to be rename.
+
+        :param file_name: Directory/File name
+        :return: 
+        """
+        if not file_name:
+            self.send_message(f"RNFR Failed - No directory name was provided!\r\n")
+        # path = os.path.join(self.cwd, dir_name)
+        path = self.cwd.joinpath(file_name)
+
+        if not path.exists():
+            self.send_message(f"550 RNTO failed File or Direcotry {file_name} not exists.\r\n")
+
+        self.rnfr = path
+        self.send_message(f"350 RNTO Done, waitting for next command\r\n")
+
+    @authorization
+    def RNTO(self, file_name):
+        """
+        Rename to.
+
+        :param dir_name: name
+        :return: 257 Directory created.
+        """
+        if not file_name:
+            self.send_message(f"RNTO Failed - No directory name was provided!\r\n")
+        # path = os.path.join(self.cwd, dir_name)
+        path = self.cwd.joinpath(file_name)
+
+        try:
+            self.rnfr.rename(path)
+        except Exception as e:
+            print(e)
+            self.send_message(
+                f"550 RNTO failed.\r\n"
+            )
+        self.send_message(f"250 RNTO Successfully.\r\n")
+
 
     """
         SOCKET RECEIVE - SEND FUNC
@@ -542,15 +588,21 @@ class ServerWorker(Thread):
 
     def PASS(self, password):
         if password:
-            print("PASS :" + password)
+            print("PASS :")
             # Need verification here
             if not self.username:
                 self.send_message("503 Bad sequence of commands - No username error.\r\n")
+                return
 
             user = session.query(User).filter_by(username=self.username).first()
-            if user.password != password:
+            if not user:
                 self.send_message("530 Login incorrect - Wrong username or password error.\r\n")
                 self.username = None
+                return
+            elif user.password != password:
+                self.send_message("530 Login incorrect - Wrong username or password error.\r\n")
+                self.username = None
+                return
 
             self.is_authorization = True
             self.initialize()

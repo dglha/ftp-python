@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
+from .Menu.RemoteMenu import RemoteMenu
 
 
 
@@ -31,7 +32,10 @@ class BaseWidget(QWidget):
         self.pathEdit.setCompleter(completer)
         # Custom context menu
         self.fileList.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.fileList.customContextMenuRequested.connect(self.menu_context_tree)
+        # self.fileList.customContextMenuRequested.connect(self.menu_context_tree)
+
+        # Menu
+        self.menu = QMenu()
 
     def create_group_box(self):
         self.pathEdit = QLineEdit()
@@ -84,13 +88,14 @@ class BaseWidget(QWidget):
         name = item.text(0)  # The text of the node.
 
         # We build the menu.
-        menu = QMenu()
-        action = menu.addAction("Mouse above")
+        # self.menu = QMenu()
         # action = menu.addAction(name)
-        menu.addSeparator()
-        action_1 = menu.addAction("Change Permissions")
-        action_2 = menu.addAction("File information")
-        action_3 = menu.addAction("Copy File Path")
+        # self.menu.addSeparator()
+        # action_1 = menu.addAction("Change Permissions")
+        # action_2 = menu.addAction("File information")
+        # action_3 = menu.addAction("Copy File Path")
+
+        self.menu.exec(self.fileList.mapToGlobal(point))
 
 
 class RemoteWidget(BaseWidget):
@@ -98,9 +103,15 @@ class RemoteWidget(BaseWidget):
         BaseWidget.__init__(self)
         self.downloadButton = QPushButton()
         self.downloadButton.setText("Download")
+
+        self.createDirButton = QPushButton()
+
         self.homeButton.setText("Home")
         self.hBox2.addWidget(self.downloadButton)
+        self.hBox2.addWidget(self.createDirButton)
         self.groupBox.setTitle('Remote')
+
+        self.menu = RemoteMenu(self)
 
 
 class LocalWidget(BaseWidget):

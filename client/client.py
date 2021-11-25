@@ -1,5 +1,9 @@
 import socket
+
+from PyQt5 import QtWidgets
+import sys
 from Worker.CommandLineWorker import CommandLineWorker
+from GUI.ClientGUI import ClientGUI
 
 
 def command_line():
@@ -12,5 +16,13 @@ def command_line():
     handler.start()
 
 
+def gui():
+    app = QtWidgets.QApplication(sys.argv)
+
+    window = ClientGUI()
+    window.show()
+    sys.exit(app.exec())
+
+
 if __name__ == "__main__":
-    command_line()
+    gui()

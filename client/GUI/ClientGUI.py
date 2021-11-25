@@ -11,11 +11,12 @@ from urllib.parse import urlparse
 
 from GUI.Dialogs.dialogs import ProgressDialog
 from GUI.GuiWidget import LocalWidget, RemoteWidget
-from BaseWindow import Ui_MainWindow
+from GUI.BaseWindow import Ui_MainWindow
 from Worker.ThreadWorker import ThreadWorker, DownloadWorker, UploadWorker
-from utils import parse_file_info, get_file_properties, path_parser
+from utils import parse_file_info, get_file_properties, path_parser, clearQTreeWidget
 from queue import LifoQueue as stack
 from constant import *
+from functools import partial
 
 icon_path = os.path.join(os.path.dirname(__file__), 'icons')
 icon = lambda icon_name: QIcon(os.path.join(icon_path, icon_name))
@@ -71,12 +72,20 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         self.connectButton.clicked.connect(lambda: Thread(target=self.createConnect).start())
 
+        # Remote menu
+        self.remote.fileList.customContextMenuRequested.connect(self.remote_menu_context_tree)
+
+        # Remote signal
         self.remote.pathEdit.returnPressed.connect(self.cdRemotePath)
         self.remote.fileList.itemDoubleClicked.connect(self.cdToRemoteDir)
         self.remote.homeButton.clicked.connect(self.cdToOriginRemoteDir)
         self.remote.backButton.clicked.connect(self.cdBackHistoryRemoteDir)
         self.remote.downloadButton.clicked.connect(self.downloadFile)
         # self.thread.finished.connect(self.progressDialog.show)
+        self.remote.createDirButton.clicked.connect(self.createRemoteDir)
+        self.remote.menu.actionAddDir.triggered.connect(self.createRemoteDir)
+        self.remote.menu.actionDelete.triggered.connect(self.deleteRemoteFile)
+        self.remote.menu.actionRename.triggered.connect(self.renameRemoteFile)
 
         self.local.pathEdit.returnPressed.connect(self.cdLocalPath)
         self.local.fileList.itemDoubleClicked.connect(self.cdToLocalDir)
@@ -92,8 +101,20 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.getRemoteFiles()
 
     def appendToStatus(self, log: str, color=BLACK_COLOR):
-        self.statusTextEdit.append(log)
         self.statusTextEdit.setTextColor(color)
+        self.statusTextEdit.append(log)
+
+
+    def remote_menu_context_tree(self, point):
+        index = self.remote.fileList.indexAt(point)
+
+        if not index.isValid():
+            return
+
+        # item = self.remote.fileList.itemAt(point)
+        # self.remote.menu.actionDelete.triggered.connect(partial(self.deleteRemoteFile, point))
+
+        self.remote.menu.exec(self.remote.fileList.mapToGlobal(point))
 
     def setupWidget(self):
         self.local = LocalWidget()
@@ -114,6 +135,10 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.actionUpload.setIcon(icon("icons8-upload-96.png"))
         self.actionUpload.triggered.connect(self.uploadProgressDialog.show)
         self.actionExit.setIcon(icon("icons8-cancel-96.png"))
+        self.actionExit.triggered.connect(self.disconnect)
+
+        # Set remote widget icon
+        self.remote.createDirButton.setIcon(icon("icons8-add-folder-96.png"))
 
     def createConnect(self):
         # if not self.hostname:
@@ -163,7 +188,9 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
     def getRemoteFiles(self):
         self.remoteWordList = []
         self.remoteDir = {}
-        self.remote.fileList.clear()
+        # self.remote.fileList.clear()
+        if self.remote.fileList.topLevelItemCount() > 0:
+            clearQTreeWidget(self.remote.fileList)
         self.ftp.dir('.', self.addItemToRemoteFiles)
         self.remote.completerModel.setStringList(self.remoteWordList)
         self.remote.fileList.sortByColumn(0, Qt.AscendingOrder)
@@ -327,6 +354,73 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         self.appendToStatus(f"Cd to remote: {self.pwd}")
 
+    @QtCore.pyqtSlot()
+    def createRemoteDir(self, *args):
+        dir_name, confirm = QInputDialog.getText(self, "New dir", "Name", QLineEdit.Normal)
+        if confirm:
+            try:
+                status = self.ftp.mkd(dir_name)
+            except Exception as e:
+                self.appendToStatus(str(e), RED_COLOR)
+                return
+            self.appendToStatus(status, BLUE_COLOR)
+            QMessageBox.about(self, "New dir", f"{dir_name} created successfully!")
+            self.getRemoteFiles()
+
+    @QtCore.pyqtSlot()
+    def deleteRemoteFile(self):
+        items = self.remote.fileList.selectedItems()
+        if len(items) < 0:
+            return
+
+        name = items[0].text(0)
+        path = os.path.join(self.pwd, name)
+
+        dialog = QMessageBox()
+        dialog.setIcon(QMessageBox.Warning)
+        dialog.setWindowTitle("Confirm")
+        dialog.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+
+        if path in self.remoteDir and self.remoteDir[path]:
+
+            dialog.setText(f"Do you want to delete \"{name}\" directory?")
+            confirm = dialog.exec()
+            print("confirm", confirm)
+
+        else:
+            dialog.setText(f"Do you want to delete \"{name}\" file?")
+            confirm = dialog.exec()
+            print("confirm", confirm)
+
+        if confirm == QMessageBox.Ok:
+            try:
+                if path in self.remoteDir:
+                    self.ftp.rmd(name)
+                else:
+                    self.ftp.delete(name)
+                self.getRemoteFiles()
+            except Exception as e:
+                self.appendToStatus(str(e), RED_COLOR)
+
+    @QtCore.pyqtSlot()
+    def renameRemoteFile(self):
+        items = self.remote.fileList.selectedItems()
+        old_name = items[0].text(0)
+        if not items:
+            return
+        new_name, confirm = QInputDialog.getText(self, "Rename", "Name", QLineEdit.Normal, text=items[0].text(0))
+        if confirm:
+            try:
+                status = self.ftp.rename(old_name, new_name)
+            except Exception as e:
+                self.appendToStatus(str(e), RED_COLOR)
+                return
+
+            self.appendToStatus(status, BLUE_COLOR)
+            QMessageBox.about(self, "Rename","Rename successfully!")
+            self.getRemoteFiles()
+
+
     """
         LOCAL FUNCS
     """
@@ -478,11 +572,3 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
     def setUploadProgressDialogProcess(self, n, file_name):
         self.uploadProgress[file_name].set_value(n)
-
-
-if __name__ == '__main__':
-    app = QtWidgets.QApplication(sys.argv)
-
-    window = ClientGUI()
-    window.show()
-    sys.exit(app.exec())
