@@ -1,5 +1,9 @@
 import sys
 import os
+import cv2
+import numpy as np
+from PIL import Image
+
 from threading import Thread
 
 from PyQt5 import QtWidgets, QtCore, QtGui
@@ -19,6 +23,11 @@ from constant import *
 
 icon_path = os.path.join(os.path.dirname(__file__), 'icons')
 icon = lambda icon_name: QIcon(os.path.join(icon_path, icon_name))
+
+fontface = cv2.FONT_HERSHEY_SIMPLEX
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+recognizer = cv2.face.LBPHFaceRecognizer_create()
+recognizer.read("E://DoAn4//ftp-python//server//recoginzer//trainingData.yml")
 
 
 class ClientGUI(QMainWindow, Ui_MainWindow):
@@ -42,7 +51,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.uploadProgress = {}
 
         # pwd
-        self.local_pwd = "F:\Project\Python\demo\\"
+        self.local_pwd = "E:\DoAn4\\demo\\"
         self.pwd = ""  # Remote dir
 
         # Current working dir
@@ -140,13 +149,10 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         response = self.ftp.login(user=self.username, passwd=self.password)
         self.statusTextEdit.append(response)
 
+        self.openCV(response.split("-")[1], response.split("-")[2])
+
         self.connectButton.setEnabled(True)
         self.connectButton.setText("Connect")
-
-        # Reset windows title
-        self.setWindowTitle(f"FileSend - {self.username} - {self.hostname}")
-
-        self.initRemoteWidget()
 
     def clearInputInfo(self):
         self.hostLineEdit.setText("")
@@ -478,6 +484,42 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
     def setUploadProgressDialogProcess(self, n, file_name):
         self.uploadProgress[file_name].set_value(n)
+
+    def openCV(self, id_response, name_response):
+        cap = cv2.VideoCapture(0)
+        isPass = False
+
+        while True:
+            ret, frame = cap.read()
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray)
+
+            check = False
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                roi_gray = gray[y:y + h, x:x + w]
+                id_roi, confidence = recognizer.predict(roi_gray)
+
+                if confidence < 40:
+                    if id_roi is not None:
+                        if id_roi == int(id_response):
+                            cv2.putText(frame, "" + str(name_response), (x + 10, y + h + 30), fontface, 1, (0, 255, 0),
+                                        2)
+                            isPass = True
+
+                        else:
+                            cv2.putText(frame, "Unknown", (x + 10, y + h + 30), fontface, 1, (0, 255, 0), 2)
+                            isPass = False
+
+            cv2.imshow('FACE RECOGNITION', frame)
+            if cv2.waitKey(1) == ord('q') and isPass:
+                self.setWindowTitle(f"FileSend - {self.username} - {self.hostname}")
+                self.initRemoteWidget()
+                break
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':

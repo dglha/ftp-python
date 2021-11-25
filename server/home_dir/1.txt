@@ -1,0 +1,21 @@
+Lý do: 
+- Thế kỉ XXI là kỉ nguyên toàn cầu, sự bùng nổ và phát triển của cách mạng công nghiệp 4.0
+- Sự phát triển mạnh mẽ của internet và smartphone
+- Đáp ứng như cầu giải trí cho giới trẻ Việt Nam
+Mục tiêu:
+- Cung cấp trò chơi để người dùng giải trí
+- Giúp các nhà lập trình game tại Việt Nam
+- Trở thành một những store game nổi tiếng tại Việt Nam
+Yêu cầu người sử dụng:
+- Giao diện đẹp
+- Dễ sử dụng
+- Dễ bảo trì
+Yêu cầu chức năng:
+- Hiệu quả cao
+- Bảo mật cao
+Chức năng:
+// trong slide
+=> tiếp theo nội dung về đề xuất,rủi ro,công cụ,ngân sách của dự án
+Dự án bắt đầu từ 22/08/2021 đến 03/12/2021
+Vai trò:
+1 Manager,1 người đảm nhiệm BA,Tester,Marketer,Developer

@@ -11,6 +11,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, nullable=False)
     password = Column(String, nullable=False)
+    # image = Column(String, nullable=False)
 
     def __repr__(self):
         return f"[USER] {self.username}"
