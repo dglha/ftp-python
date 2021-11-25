@@ -99,6 +99,8 @@ class ProgressDialog(QMainWindow):
         self.layout.setContentsMargins(0, 10, 0, 0)
         self.centralWidget.setLayout(self.layout)
 
+        self.setStyleSheet("background-color: white")
+
     def addProgressbar(self, progressbar):
         self.layout.insertWidget(0, progressbar)
 

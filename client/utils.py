@@ -2,6 +2,9 @@ from typing import List, Union
 import os
 import stat
 import time
+from PyQt5 import QtGui
+from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItemIterator
+from PyQt5 import sip
 
 
 class HumanSize:
@@ -102,3 +105,24 @@ def get_file_properties(file_path):
 
 def path_parser(path: str):
     return path if path.endswith(os.path.sep) else path + os.path.sep
+
+
+def clearQTreeWidget(tree: QTreeWidget):
+    # iterator = QtGui.QTreeWidgetItemIterator(tree, QtGui.QTreeWidgetItemIterator.All)
+    # while iterator.value():
+    #     iterator.value().takeChildren()
+    #     iterator +=1
+    # i = tree.topLevelItemCount()
+    # while i > -1:
+    #     tree.takeTopLevelItem(i)
+    #     i -= 1
+    a = QTreeWidgetItemIterator(tree)
+    root = tree.invisibleRootItem()
+    while a.value():
+        item = a.value()
+        sip.delete(item)
+        a += 1
+    i = tree.topLevelItemCount()
+    while i > -1:
+        tree.takeTopLevelItem(i)
+        i -= 1
