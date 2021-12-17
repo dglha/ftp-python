@@ -566,7 +566,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         if not fileItem:
             self.showErrorMsg("Please choose a file to upload!")
             return
-        if not self.checkIsDir(fileItem.text(0), self.localDir):
+        if self.checkIsDir(fileItem.text(0), self.localDir):
             self.showErrorMsg("Cannot upload directory!")
             return
         sourceFile = os.path.join(self.local_pwd, fileItem.text(0))
