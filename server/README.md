@@ -13,7 +13,9 @@ This is FTP Serer - PyQT5 GUI Framework
 Windows 10 21H2
 
 ## Screenshot
-Upload later
+![Main GUI](screenshots/1.png)
+![Create User](screenshots/2.png)
+![Edit User](screenshots/3.png)
 
 ## References
 - [FTP Commands list](https://en.wikipedia.org/wiki/List_of_FTP_commands).
