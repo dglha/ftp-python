@@ -14,13 +14,7 @@ import shutil
 import sqlalchemy as db
 from pathlib import Path
 
-engine = db.create_engine("sqlite:///fpt_implement.sqlite", connect_args={'check_same_thread': False})
-connection = engine.connect()
-DBSession = sessionmaker(bind=engine)
-session = DBSession()
-
-ALLOW_DELETE = True
-ALLOW_WRITE = True
+from Worker.UserWorker import check_user
 
 
 def authorization(func):
@@ -37,9 +31,31 @@ def authorization(func):
     # return decorator
 
 
+def check_write_permission(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        is_write = self.is_write
+        if not is_write:
+            return self.send_message("450 - Put operation not allow on this user! \r\n")
+        return func(self, *args, **kwargs)
+    return wrapper
+
+
+def check_delete_permission(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        is_delete = self.is_delete
+        if not is_delete:
+            return self.send_message("450 - Delete operation not allow on this user! \r\n")
+        return func(self, *args, **kwargs)
+    return wrapper
+
+
 class ServerWorker(Thread):
     def __init__(self, address, socket: socket.socket, host) -> None:
         Thread.__init__(self)
+        self.is_kill = False
+
         self.cwd = Path(SERVER_DATA_PATH)
         self.client_address = address
         self.client_address_ip = address[0]
@@ -50,10 +66,14 @@ class ServerWorker(Thread):
         self.HOST = host
         self.rest = False
         self.pos = 0
-        self.rnfr = ""
+        self.rnfr = Path()
         # Auth
         self.username = None
         self.is_authorization = False
+        # User permission
+        self.is_write = False
+        self.is_delete = False
+
         self.client_data_socket = None
         self.mode = None
 
@@ -62,6 +82,9 @@ class ServerWorker(Thread):
         self.root_cwd = self.cwd
 
         print("started")
+
+    def terminate(self):
+        self.is_kill = True
 
     def initialize(self):
         # Each user is a private space
@@ -74,7 +97,7 @@ class ServerWorker(Thread):
     def run(self):
         self.send_message("220 Welcome.\r\n")
         # self.welcome()
-        while True:
+        while not self.is_kill:
             try:
                 data = self.client_socket.recv(SIZE).rstrip()
 
@@ -97,7 +120,7 @@ class ServerWorker(Thread):
                 func = getattr(self, command)
                 func(args)
             except Exception as e:
-                print(e)
+                print("[Exception]: ", e)
                 self.send_message(
                     "500 Syntax error, command unrecognized. "
                     "This may include errors such as command line too long.\r\n"
@@ -329,7 +352,7 @@ class ServerWorker(Thread):
         :return: 257 Directory created.
         """
         if not dir_name:
-            self.send_message(f"MKD Failed - No directory name was provided!\r\n")
+            self.send_message(f"501 MKD Failed - No directory name was provided!\r\n")
         # path = os.path.join(self.cwd, dir_name)
         path = self.cwd.joinpath(dir_name)
 
@@ -343,6 +366,7 @@ class ServerWorker(Thread):
             )
 
     @authorization
+    @check_delete_permission
     def RMD(self, dir_name):
         """
         Remove a directory.
@@ -351,18 +375,18 @@ class ServerWorker(Thread):
         :return: 250 Directory deleted
         """
         if not dir_name:
-            self.send_message(f"MKD Failed - No directory name was provided!\r\n")
+            self.send_message(f"501 RMD Failed - No directory name was provided!\r\n")
         # path = os.path.join(self.cwd, dir_name)
         path = self.cwd.joinpath(dir_name)
 
-        if not ALLOW_DELETE:
-            self.send_message(
-                f"450 RMD failed - Detele operation not allow on this server! \r\n"
-            )
+        # if not self.is_delete:
+        #     self.send_message(
+        #         f"450 RMD failed - Detele operation not allow on this server! \r\n"
+        #     )
 
         # ^If dir is not exists
         # elif not os.path.exists(path):
-        elif not path.exists():
+        if not path.exists():
             self.send_message(f"550 RMD failed - Directory {dir_name} not exists!\r\n")
 
         else:
@@ -374,6 +398,7 @@ class ServerWorker(Thread):
                 self.send_message(f"550 RMD failed - {e}\r\n")
 
     @authorization
+    @check_delete_permission
     def DELE(self, file_name):
         """
         Delete file.
@@ -383,16 +408,17 @@ class ServerWorker(Thread):
         """
         # path = os.path.join(self.cwd, file_name)
         path = self.cwd.joinpath(file_name)
+        print(path)
 
         # ^If file or dir is not exists
         # if not os.path.exists(path):
         if not path.exists():
             self.send_message(f"550 DELE failed File {file_name} not exists.\r\n")
 
-        elif not ALLOW_DELETE:
-            self.send_message(
-                f"450 DELE failed - Detele operation not allow on this server! \r\n"
-            )
+        # elif not self.is_delete:
+        #     self.send_message(
+        #         f"450 DELE failed - Detele operation not allow on this server! \r\n"
+        #     )
 
         elif not path.is_file():
             self.send_message(f"550 DELE failed, {file_name} is directory.\r\n")
@@ -402,6 +428,7 @@ class ServerWorker(Thread):
             self.send_message("250 DELE File deleted.\r\n")
 
     @authorization
+    @check_write_permission
     def RNFR(self, file_name):
         """
         Choose file or dir to be rename.
@@ -410,7 +437,7 @@ class ServerWorker(Thread):
         :return: 
         """
         if not file_name:
-            self.send_message(f"RNFR Failed - No directory name was provided!\r\n")
+            self.send_message(f"501 RNFR Failed - No directory name was provided!\r\n")
         # path = os.path.join(self.cwd, dir_name)
         path = self.cwd.joinpath(file_name)
 
@@ -421,15 +448,16 @@ class ServerWorker(Thread):
         self.send_message(f"350 RNTO Done, waitting for next command\r\n")
 
     @authorization
+    @check_write_permission
     def RNTO(self, file_name):
         """
         Rename to.
 
-        :param dir_name: name
+        :param file_name: name
         :return: 257 Directory created.
         """
         if not file_name:
-            self.send_message(f"RNTO Failed - No directory name was provided!\r\n")
+            self.send_message(f"501 RNTO Failed - No directory name was provided!\r\n")
         # path = os.path.join(self.cwd, dir_name)
         path = self.cwd.joinpath(file_name)
 
@@ -448,6 +476,7 @@ class ServerWorker(Thread):
     """
 
     @authorization
+    @check_write_permission
     def PUT(self, file_name):
         """"""
         # ^Check if user is authenticated
@@ -469,6 +498,7 @@ class ServerWorker(Thread):
         self.stop_data_socket()
 
     @authorization
+    @check_write_permission
     def STOR(self, file_name):
         """
         Accept the data and to store the data as a file at the server site
@@ -594,17 +624,21 @@ class ServerWorker(Thread):
                 self.send_message("503 Bad sequence of commands - No username error.\r\n")
                 return
 
-            user = session.query(User).filter_by(username=self.username).first()
-            if not user:
+            check, user = check_user(self.username, password)
+            if not check:
                 self.send_message("530 Login incorrect - Wrong username or password error.\r\n")
                 self.username = None
                 return
-            elif user.password != password:
-                self.send_message("530 Login incorrect - Wrong username or password error.\r\n")
-                self.username = None
-                return
+            # elif user.password != password:
+            #     self.send_message("530 Login incorrect - Wrong username or password error.\r\n")
+            #     self.username = None
+            #     return
 
             self.is_authorization = True
+            self.is_write = bool(user.is_write)
+            self.is_delete = bool(user.is_delete)
+
+            print(f"{self.is_write=}, {self.is_delete=}")
             self.initialize()
 
             self.send_message("230 Logged on - Login successfully!\r\n")

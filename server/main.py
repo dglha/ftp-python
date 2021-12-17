@@ -1,7 +1,12 @@
 import os
 import logging
 import socket
+import sys
 from threading import Thread
+
+from PyQt5.QtWidgets import QApplication
+
+from GUI.ServerGUI import ServerGUI
 from settings import *
 from Worker.ServerWorker import ServerWorker
 
@@ -27,6 +32,15 @@ def server_listener():
         print("[SERVER] New connection from {}".format(address))
 
 
+def gui():
+    app = QApplication(sys.argv)
+    ui = ServerGUI()
+    ui.show()
+    sys.exit(app.exec_())
+
+
 if __name__ == "__main__":
-    listener = Thread(target=server_listener)
-    listener.start()
+    # listener = Thread(target=server_listener)
+    # listener.start()
+
+    gui()
