@@ -14,6 +14,7 @@ import socket
 from settings import PORT
 from functools import partial
 import datetime
+from FaceRecognition.training import training
 
 __version__ = "0.1"
 __author__ = "dlha_ndphuc"
@@ -58,6 +59,7 @@ class ServerGUI(QMainWindow, Ui_MainWindow):
         self.createButton.clicked.connect(self.createUser)
         self.deleteButton.clicked.connect(self.deleteUser)
         self.editButton.clicked.connect(self.updateUser)
+        self.trainingButton.clicked.connect(self.trainingData)
 
     def appendToStatus(self, log: str, color=GREEN_COLOR):
         now = datetime.datetime.now()
@@ -139,7 +141,11 @@ class ServerGUI(QMainWindow, Ui_MainWindow):
     @QtCore.pyqtSlot()
     def stopServer(self):
         pass
-
+    
+    @QtCore.pyqtSlot()
+    def trainingData(self):
+        path = 'dataSet'
+        training(path)
 
 class GuiRunner(QRunnable):
     """

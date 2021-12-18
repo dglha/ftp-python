@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QDialog, QMessageBox
 
 from .BaseDialog import Ui_Dialog
 from Worker.UserWorker import create_user, get_user, update_user
+from FaceRecognition.getData import getFace
 
 icon_path = os.path.join(os.path.dirname(__file__), 'icons')
 
@@ -30,8 +31,10 @@ class CreateUserDialog(QDialog, Ui_Dialog):
         is_write = self.writeCheckbox.isChecked()
         is_delete = self.deleleCheckbox.isChecked()
 
+        # check = getFace(username=)
         result = create_user(username, passwd, is_write, is_delete)
         if result:
+            getFace(username)
             dialog = QMessageBox.information(self, "Adding new user", "Successfully!", QMessageBox.Ok)
         else:
             dialog = QMessageBox.information(self, "Adding new user", "Failed!", QMessageBox.Ok)

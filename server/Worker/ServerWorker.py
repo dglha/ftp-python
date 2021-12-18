@@ -641,7 +641,7 @@ class ServerWorker(Thread):
             print(f"{self.is_write=}, {self.is_delete=}")
             self.initialize()
 
-            self.send_message("230 Logged on - Login successfully!\r\n")
+            self.send_message("230 - "+str(user.id)+" - "+str(user.username)+" - Logged on - Login successfully!\r\n")
         else:
             self.send_message("503 Bad sequence of commands - Syntax error\r\n")
 
