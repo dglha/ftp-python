@@ -534,7 +534,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         if not fileItem:
             self.showErrorMsg("Please choose a file to download!")
             return
-        if not self.checkIsDir(fileItem.text(0), self.remoteDir):
+        if self.checkIsDir(fileItem.text(0), self.remoteDir):
             self.showErrorMsg("Cannot download directory!")
             return
         sourceFile = os.path.join(self.pwd, fileItem.text(0))
