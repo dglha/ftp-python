@@ -69,11 +69,19 @@ class BaseWidget(QWidget):
 
     def create_file_list(self):
         self.fileList = QTreeWidget()
+        self.fileList.setStyleSheet("""
+            QTreeView::item {
+                  padding: 5px;
+                  
+            }
+        """)
         self.fileList.setIconSize(QSize(25, 25))
         self.fileList.setRootIsDecorated(False)
         # self.fileList.setHeaderLabels(('Name', 'Size', 'Owner', 'Group', 'Time', 'Mode'))
         self.fileList.setHeaderLabels(('Name', 'Size', 'Time', 'Mode'))
-        self.fileList.header().setStretchLastSection(True)
+        self.fileList.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.fileList.header().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+        self.fileList.header().setStretchLastSection(False)
         self.fileList.setSortingEnabled(True)
         # self.fileList.setModel(self.fileModel)
 
@@ -121,7 +129,7 @@ class LocalWidget(BaseWidget):
         self.uploadButton.setText("Upload")
         self.connectButton.setText("Connect")
         self.hBox2.addWidget(self.uploadButton)
-        self.hBox2.addWidget(self.connectButton)
+        # self.hBox2.addWidget(self.connectButton)
         self.groupBox.setTitle('Local')
 
         # New pick location button

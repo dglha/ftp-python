@@ -7,7 +7,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from ftplib import FTP
-from urllib.parse import urlparse
+import validators
 
 from GUI.Dialogs.dialogs import ProgressDialog
 from GUI.GuiWidget import LocalWidget, RemoteWidget
@@ -158,6 +158,12 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.username = self.userLineEdit.text()
         self.password = self.passLineEdit.text()
 
+        # Parse url or ip address
+        if not validators.url(self.hostname):
+            if not validators.ipv4(self.hostname):
+                self.showErrorMsg("The input url is invalid!")
+                return
+
         self.connectButton.setEnabled(False)
         self.connectButton.setText("Connecting...")
 
@@ -221,6 +227,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
             self.remoteWordList.append(fileName)
             path = os.path.join(self.pwd, fileName)
             self.remoteDir[path] = True
+            size = ""
         else:
             # fileIcon = QFileIconProvider.icon(QFileIconProvider(), QFileIconProvider.File)
             fileIcon = icon("icons8-document-240.png")
@@ -262,6 +269,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
             self.localWordList.append(fileName)
             path = os.path.join(self.local_pwd, fileName)
             self.localDir[path] = True
+
+            size = ""
 
         else:
             fileIcon = QFileIconProvider.icon(QFileIconProvider(), QFileInfo(fileName))
@@ -524,6 +533,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
     """
 
     def checkIsDir(self, file_name: str, file_dict: dict):
+        print(file_dict)
         return file_name in file_dict and file_dict[file_name] == True
 
     def downloadFile(self):
@@ -534,10 +544,11 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         if not fileItem:
             self.showErrorMsg("Please choose a file to download!")
             return
-        if self.checkIsDir(fileItem.text(0), self.remoteDir):
+        sourceFile = os.path.join(self.pwd, fileItem.text(0))
+        if self.checkIsDir(sourceFile, self.remoteDir):
             self.showErrorMsg("Cannot download directory!")
             return
-        sourceFile = os.path.join(self.pwd, fileItem.text(0))
+
         destinationFile = os.path.join(self.local_pwd, fileItem.text(0))
 
         fileSize = self.ftp.size(fileItem.text(0))
@@ -566,7 +577,8 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         if not fileItem:
             self.showErrorMsg("Please choose a file to upload!")
             return
-        if not self.checkIsDir(fileItem.text(0), self.localDir):
+        sourceFile = os.path.join(self.local_pwd, fileItem.text(0))
+        if self.checkIsDir(sourceFile, self.localDir):
             self.showErrorMsg("Cannot upload directory!")
             return
         sourceFile = os.path.join(self.local_pwd, fileItem.text(0))
