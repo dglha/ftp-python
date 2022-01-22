@@ -13,25 +13,25 @@ def training(path):
     # print(imagePaths)
     
     faces = []
-    usernames = []
+    ids = []
     
     for imagePath in imagePaths:
         faceImg = Image.open(imagePath).convert('L')
         faceNp = np.array(faceImg,'uint8')
         
-        # imagePath = dataSet\\User.username.sampleName.jpg
-        # imagePath.split('\\') => [0] = dataSet [1] = User.username.sampleName.jpg
-        # [1].split('.')[1] = username
-        username = int(imagePath.split('\\')[1].split('.')[1])
+        # imagePath = dataSet\\User.id.sampleName.jpg
+        # imagePath.split('\\') => [0] = dataSet [1] = User.id.sampleName.jpg
+        # [1].split('.')[1] = id
+        id = int(imagePath.split('\\')[1].split('.')[1])
          
         faces.append(faceNp)
-        usernames.append(username)
+        ids.append(id)
         
         cv2.imshow('TRAINING',faceNp)
         cv2.waitKey(10)
         
     # return faces,usernames
-    recognizer.train(faces, np.array(usernames))
+    recognizer.train(faces, np.array(ids))
     
     if not os.path.exists("recoginzer"):
         os.makedirs("recoginzer")
