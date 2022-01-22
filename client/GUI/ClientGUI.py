@@ -1,6 +1,7 @@
 import sys
 import os
 from threading import Thread
+import cv2
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtGui import *
@@ -24,7 +25,6 @@ fontface = cv2.FONT_HERSHEY_SIMPLEX
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 recognizer = cv2.face.LBPHFaceRecognizer_create()
 recognizer.read("E://DoAn4//ftp-python//server//recoginzer//trainingData.yml")
-
 
 def icon(icon_name):
     return QIcon(os.path.join(icon_path, icon_name))
@@ -179,7 +179,10 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
         try:
             response = self.ftp.login(user=self.username, passwd=self.password)
-            self.openCV(response.split("-")[1], response.split("-")[2])
+            splitResponse = response.split('- ')
+            print(splitResponse)
+            # if str(splitResponse[0]) == 230:
+            self.faceRecognition(splitResponse[1], splitResponse[2])
         except Exception as e:
             self.ftp.quit()
             self.appendToStatus(str(e), RED_COLOR)
@@ -190,7 +193,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         self.connectButton.setText("Connect")
 
         # Reset windows title
-        # self.setWindowTitle(f"FileSend - {self.username} - {self.hostname}")
+        self.setWindowTitle(f"FileSend - {self.username} - {self.hostname}")
 
         self.showSuccessMsg("Login", "Login successfully!")
         self.clearInputInfo()
@@ -540,7 +543,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
         if not fileItem:
             self.showErrorMsg("Please choose a file to download!")
             return
-        if not self.checkIsDir(fileItem.text(0), self.remoteDir):
+        if self.checkIsDir(fileItem.text(0), self.remoteDir):
             self.showErrorMsg("Cannot download directory!")
             return
         sourceFile = os.path.join(self.pwd, fileItem.text(0))
@@ -569,6 +572,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
 
     def uploadFile(self):
         fileItem = self.local.fileList.currentItem()
+        # print(fileItem)
         if not fileItem:
             self.showErrorMsg("Please choose a file to upload!")
             return
@@ -637,7 +641,7 @@ class ClientGUI(QMainWindow, Ui_MainWindow):
     def setUploadProgressDialogProcess(self, n, file_name):
         self.uploadProgress[file_name].set_value(n)
 
-    def openCV(self, id_response, name_response):
+    def faceRecognition(self, id_response, name_response):
         cap = cv2.VideoCapture(0)
         isPass = False
 
